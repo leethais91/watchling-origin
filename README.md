@@ -37,8 +37,9 @@ cd echoear-firmware/simulator
 ./cmake-out/dashboard_sim                         # live SDL window (blink animation)
 ```
 
-On the device, usage, cost, status and the USB link icon come from the bridge; clock, date,
-Wi-Fi, BLE and battery show mock values until those providers exist.
+On the device, usage, cost, status, clock/date and the USB link icon come from the bridge
+(the clock shows `--:--` until the first sync); Wi-Fi, BLE and battery show mock values until
+those providers exist.
 
 ## PC bridge
 

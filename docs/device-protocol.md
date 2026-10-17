@@ -28,6 +28,7 @@ Field `t` is the message type. Percentages are integers 0–100 or `null` when u
 | `hello` | – | Port opened; device replies `hello` |
 | `ping` | – | Every 2 s; device replies `pong`. Device shows "no bridge" after 5 s silence |
 | `usage` | `claude:{h5,d7,costToday}`, `codex:{h5,d7}` | 5-hour / 7-day window usage; `costToday` USD (estimated, list price) |
+| `time` | `epoch`, `tz` | Unix seconds (UTC) and host offset in minutes east of UTC (Asia/Saigon = `420`). Sent after `hello` and every 10 min; the device sets its clock and keeps ticking between syncs |
 | `event` | `src: claude\|codex`, `kind: done\|attention\|error`, `text` | Turn finished / waiting for input / API error |
 | `confirm_req` | `id`, `tool`, `summary`, `risk: low\|medium\|high`, `project` | Show permission modal |
 | `confirm_cancel` | `id` | Request resolved elsewhere (timeout, terminal, hook exited); hide modal if it shows `id` |

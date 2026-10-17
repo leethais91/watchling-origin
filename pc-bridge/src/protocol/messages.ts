@@ -13,6 +13,13 @@ export interface UsageMessage {
   codex: { h5: number | null; d7: number | null };
 }
 
+/** Unix seconds (UTC) and the host's offset from UTC in minutes (Asia/Saigon = 420). */
+export interface ClockMessage {
+  t: "time";
+  epoch: number;
+  tz: number;
+}
+
 export interface ConfirmRequestMessage {
   t: "confirm_req";
   id: number;
@@ -34,6 +41,7 @@ export type HostMessage =
   | { t: "hello" }
   | { t: "ping" }
   | UsageMessage
+  | ClockMessage
   | AgentEventMessage
   | ConfirmRequestMessage
   | { t: "confirm_cancel"; id: number };

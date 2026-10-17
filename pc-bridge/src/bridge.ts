@@ -5,6 +5,7 @@
  *   ECHOEAR_PORT=/dev/cu.usbmodemXXXX  skip auto-detection
  *   ECHOEAR_CONFIRM_TIMEOUT_S=120      how long a request waits on the device
  */
+import { clockMessage } from "./clock/clock-message.js";
 import { startIpcServer } from "./ipc/ipc-server.js";
 import { SOCKET_PATH } from "./ipc/paths.js";
 import { PermissionBroker } from "./permission/permission-broker.js";
@@ -16,6 +17,8 @@ const CONFIRM_TIMEOUT_MS = Number(process.env.ECHOEAR_CONFIRM_TIMEOUT_S ?? 120) 
 /** Coalesces bursts of statusline/Codex updates into one usage frame. */
 const USAGE_THROTTLE_MS = 1000;
 const MAX_EVENT_TEXT_CHARS = 200;
+/** The device keeps time itself; resyncing corrects drift and picks up DST changes. */
+const CLOCK_RESYNC_MS = 10 * 60 * 1000;
 
 const log = (...args: unknown[]) => console.log(new Date().toLocaleTimeString(), ...args);
 
@@ -41,6 +44,7 @@ transport.on("message", (msg) => {
   switch (msg.t) {
     case "hello":
       log(`device ready (fw ${msg.fw})`);
+      transport.send(clockMessage());
       transport.send(usage.snapshot());
       broker.resendActive();
       break;
@@ -73,6 +77,8 @@ await startCodexSessionWatcher({
       text: message.replace(/\s+/g, " ").trim().slice(0, MAX_EVENT_TEXT_CHARS) || "Task finished",
     }),
 });
+
+setInterval(() => transport.send(clockMessage()), CLOCK_RESYNC_MS).unref();
 
 transport.start();
 log(`bridge listening on ${SOCKET_PATH}`);

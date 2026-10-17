@@ -5,6 +5,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -74,6 +75,18 @@ static void handle_usage(const cJSON *msg)
     ui_set_usage(&usage);
 }
 
+/* The bridge sends UTC seconds plus its local offset; the RTC keeps counting between syncs. */
+static void handle_time(const cJSON *msg)
+{
+    const cJSON *epoch = cJSON_GetObjectItemCaseSensitive(msg, "epoch");
+    if (!cJSON_IsNumber(epoch) || epoch->valuedouble <= 0) {
+        return;
+    }
+    struct timeval tv = {.tv_sec = (time_t)epoch->valuedouble};
+    settimeofday(&tv, NULL);
+    ui_set_clock_offset(json_int(msg, "tz", 0));
+}
+
 static void handle_event(const cJSON *msg)
 {
     const char *kind = json_str(msg, "kind");
@@ -112,6 +125,8 @@ static void on_host_message(const char *json, size_t len)
         send_hello();
     } else if (strcmp(type, "usage") == 0) {
         handle_usage(msg);
+    } else if (strcmp(type, "time") == 0) {
+        handle_time(msg);
     } else if (strcmp(type, "event") == 0) {
         handle_event(msg);
     } else if (strcmp(type, "confirm_req") == 0) {

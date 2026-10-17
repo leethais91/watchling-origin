@@ -37,6 +37,8 @@ typedef bool (*ui_link_probe_t)(void);
 void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe);
 
 void ui_set_usage(const ui_usage_t *usage);
+/* The system clock now holds UTC; show it shifted by the host's offset (minutes east of UTC). */
+void ui_set_clock_offset(int utc_offset_min);
 void ui_show_event(const char *source, ui_event_kind_t kind, const char *text);
 void ui_show_confirm(uint32_t id, const char *tool, const char *summary, ui_risk_t risk, const char *project);
 /* Hides the modal if it still shows request `id`. */

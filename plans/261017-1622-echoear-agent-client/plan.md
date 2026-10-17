@@ -7,7 +7,7 @@ Status: Phase 1 + Phase 2 done (verified on device 2026-10-17); Phase 3 next
   (`echoear-firmware/simulator/`); firmware builds. Not yet checked on the panel.
 - Avatar is cut from the design mockup (`main/assets/robot_avatar.png`, RGB565A8); eyes blink via
   LVGL lids over the baked-in eyes. Fonts: Montserrat Bold/SemiBold subsets (OFL).
-- Clock/date/Wi-Fi/BLE/battery are mock until providers exist (no RTC/SNTP, Wi-Fi, BLE or
+- Clock/date synced from the bridge (`time` message). Wi-Fi/BLE/battery are mock until providers exist (no Wi-Fi, BLE or
   fuel-gauge driver yet). Working/notification screens, page dots and waveform not built.
 
 ## Phase 2 findings (live test 2026-10-17)

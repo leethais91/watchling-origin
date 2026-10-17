@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include "bsp/esp-bsp.h"
 #include "lvgl.h"
 
@@ -24,13 +25,16 @@
 #define BUTTON_OFFSET_X   62
 #define BUTTON_OFFSET_Y   92
 #define RING_PULSE_MS     500
-#define LINK_POLL_MS      1000
+#define STATUS_POLL_MS    1000
 
 static ui_decision_cb_t s_on_decision;
 static ui_link_probe_t s_link_probe;
 
-/* Clock, date, Wi-Fi, BLE and battery stay on mock values until those providers exist. */
+/* Wi-Fi, BLE and battery stay on mock values until those providers exist. */
 static agent_dashboard_data_t s_dash;
+/* Set once the bridge has synced the clock; until then the dashboard shows "--:--". */
+static bool s_clock_synced;
+static int s_utc_offset_min;
 
 static lv_obj_t *s_modal;
 static lv_obj_t *s_modal_title;
@@ -150,10 +154,25 @@ static void modal_show(uint32_t id, const char *tool, const char *summary, ui_ri
     s_modal_visible = true;
 }
 
-static void link_timer_cb(lv_timer_t *timer)
+static void clock_format(void)
+{
+    time_t local = time(NULL) + (time_t)s_utc_offset_min * 60;
+    struct tm tm;
+    gmtime_r(&local, &tm);
+    strftime(s_dash.time_text, sizeof(s_dash.time_text), "%H:%M", &tm);
+    char day_month[12];
+    strftime(day_month, sizeof(day_month), "%a, %b", &tm);
+    snprintf(s_dash.date_text, sizeof(s_dash.date_text), "%s %d", day_month, tm.tm_mday);
+}
+
+/* Runs every second in the LVGL task; the dashboard only redraws what changed. */
+static void status_timer_cb(lv_timer_t *timer)
 {
     bool linked = s_link_probe();
     s_dash.host_linked = linked;
+    if (s_clock_synced) {
+        clock_format();
+    }
     agent_dashboard_update(&s_dash);
     if (!linked && s_modal_visible) {
         modal_hide(); /* the bridge releases the request to the terminal on its side */
@@ -171,9 +190,11 @@ void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe)
     lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
     agent_dashboard_create(lv_screen_active());
     agent_dashboard_mock_data(&s_dash);
+    s_dash.time_text[0] = '\0';
+    s_dash.date_text[0] = '\0';
     agent_dashboard_update(&s_dash);
     modal_create();
-    lv_timer_create(link_timer_cb, LINK_POLL_MS, NULL);
+    lv_timer_create(status_timer_cb, STATUS_POLL_MS, NULL);
     bsp_display_unlock();
 }
 
@@ -185,6 +206,16 @@ void ui_set_usage(const ui_usage_t *usage)
     s_dash.codex_usage_percent = usage->codex_h5;
     s_dash.codex_weekly_percent = usage->codex_d7;
     s_dash.daily_cost = usage->cost_today;
+    agent_dashboard_update(&s_dash);
+    bsp_display_unlock();
+}
+
+void ui_set_clock_offset(int utc_offset_min)
+{
+    bsp_display_lock(0);
+    s_utc_offset_min = utc_offset_min;
+    s_clock_synced = true;
+    clock_format();
     agent_dashboard_update(&s_dash);
     bsp_display_unlock();
 }
