@@ -35,7 +35,8 @@ Created: 2026-10-17
 - PC bridge: TypeScript, Node 22 LTS (native `serialport`/`noble`).
 - Claude Code integration via hooks (`PermissionRequest`, `Notification`, `Stop`, statusline) — no `node-pty`.
 - Accounts: subscription (Claude Pro/Max, ChatGPT plan) → arcs show 5h/weekly `used_percentage`; handle missing fields.
-- Codex scope: usage % + done notifications only (tail `~/.codex/sessions/**/*.jsonl`), no approval interception.
+- Codex scope: usage %, working/done from `~/.codex/sessions/**/*.jsonl`. Approval interception added
+  2026-10-17 (user decision) via the Codex 0.162 PermissionRequest hook, which matches Claude Code's.
 - Transport MVP: USB-Serial-JTAG, COBS + CRC16 framing. BLE (NUS, LESC passkey bonding, ADPCM) = separate later phase.
 - TTS: no on-device English TTS (ESP-TTS is Mandarin-only) → prerecorded clips in flash + PC-generated PCM over USB.
 - Safety policy: touch = approve/deny; voice = approve only low-risk, deny always; IMU tap = deny/mute only.
