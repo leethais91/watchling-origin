@@ -46,6 +46,7 @@ const hookCommand = (arg: string, timeout: number): HookCommand => ({
 
 const ECHOEAR_HOOKS: Record<string, HookMatcher> = {
   PermissionRequest: { hooks: [hookCommand("permission", PERMISSION_HOOK_TIMEOUT_S)] },
+  UserPromptSubmit: { hooks: [hookCommand("prompt", EVENT_HOOK_TIMEOUT_S)] },
   Stop: { hooks: [hookCommand("stop", EVENT_HOOK_TIMEOUT_S)] },
   StopFailure: { hooks: [hookCommand("stop-failure", EVENT_HOOK_TIMEOUT_S)] },
   Notification: { matcher: "idle_prompt", hooks: [hookCommand("notification", EVENT_HOOK_TIMEOUT_S)] },

@@ -1,9 +1,9 @@
 /**
- * Claude Code hook entry: `node dist/hook.js <permission|stop|stop-failure|notification>`
+ * Claude Code hook entry: `node dist/hook.js <permission|prompt|stop|stop-failure|notification>`
  * with the hook JSON on stdin. Every path exits 0; printing nothing leaves Claude Code
  * on its normal flow, so a stopped bridge or unplugged device never blocks work.
  */
-import type { AgentEventMessage } from "./protocol/messages.js";
+import type { AgentActivityMessage, AgentEventMessage } from "./protocol/messages.js";
 import type { PermissionResponse } from "./ipc/ipc-server.js";
 import { postToBridge, readStdin } from "./ipc/ipc-client.js";
 
@@ -28,6 +28,12 @@ switch (command) {
   case "permission":
     await handlePermission(input);
     break;
+  case "prompt": {
+    // A new turn starts; the turn-ending Stop/StopFailure events clear it on the device.
+    const activity: Omit<AgentActivityMessage, "t"> = { src: "claude", busy: true };
+    await postToBridge("/activity", activity, EVENT_TIMEOUT_MS);
+    break;
+  }
   case "stop":
     await sendEvent("done", input.last_assistant_message || "Task finished");
     break;

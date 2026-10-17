@@ -5,11 +5,12 @@
  *                     exits first, the request is cancelled on the device.
  *   POST /statusline  Claude Code statusline JSON → 204
  *   POST /event       AgentEventMessage without `t` → 204
+ *   POST /activity    AgentActivityMessage without `t` → 204
  */
 import { chmod, mkdir, unlink } from "node:fs/promises";
 import { connect } from "node:net";
 import { createServer, type IncomingMessage, type Server } from "node:http";
-import type { AgentEventMessage, Decision } from "../protocol/messages.js";
+import type { AgentActivityMessage, AgentEventMessage, Decision } from "../protocol/messages.js";
 import type { PermissionInput } from "../permission/permission-summary.js";
 import type { StatuslineInput } from "../usage/usage-store.js";
 import { ECHOEAR_DIR, SOCKET_PATH } from "./paths.js";
@@ -25,6 +26,7 @@ export interface IpcHandlers {
   permission: (input: PermissionInput, signal: AbortSignal) => Promise<Decision | null>;
   statusline: (input: StatuslineInput) => void;
   event: (event: Omit<AgentEventMessage, "t">) => void;
+  activity: (activity: Omit<AgentActivityMessage, "t">) => void;
 }
 
 export async function startIpcServer(handlers: IpcHandlers): Promise<Server> {
@@ -60,6 +62,10 @@ export async function startIpcServer(handlers: IpcHandlers): Promise<Server> {
         return;
       case "/event":
         handlers.event(body as Omit<AgentEventMessage, "t">);
+        res.writeHead(204).end();
+        return;
+      case "/activity":
+        handlers.activity(body as Omit<AgentActivityMessage, "t">);
         res.writeHead(204).end();
         return;
       default:

@@ -82,6 +82,7 @@ await startIpcServer({
   },
   statusline: (input) => usage.updateFromStatusline(input),
   event: sendEvent,
+  activity: (activity) => transport.send({ t: "activity", ...activity }),
 });
 
 await startCodexSessionWatcher({
@@ -92,6 +93,7 @@ await startCodexSessionWatcher({
       kind: "done",
       text: message.replace(/\s+/g, " ").trim().slice(0, MAX_EVENT_TEXT_CHARS) || "Task finished",
     }),
+  onActivity: (busy) => transport.send({ t: "activity", src: "codex", busy }),
 });
 
 setInterval(() => transport.send(clockMessage()), CLOCK_RESYNC_MS).unref();

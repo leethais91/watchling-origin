@@ -32,6 +32,7 @@ Field `t` is the message type. Percentages are integers 0–100 or `null` when u
 | `usage` | `claude:{h5,d7,costToday}`, `codex:{h5,d7}` | 5-hour / 7-day window usage; `costToday` USD (estimated, list price) |
 | `time` | `epoch`, `tz` | Unix seconds (UTC) and host offset in minutes east of UTC (Asia/Saigon = `420`). Sent after `hello` and every 10 min; the device sets its clock and keeps ticking between syncs |
 | `event` | `src: claude\|codex`, `kind: done\|attention\|error`, `text` | Turn finished / waiting for input / API error. Device plays a chime per kind |
+| `activity` | `src: claude\|codex`, `busy: bool` | Agent started working (Claude `UserPromptSubmit`, Codex `task_started`) or was interrupted (Codex `turn_aborted`). Any `event` from that `src` also ends busy; the device drops it after 15 min without one |
 | `say` | `id`, `bytes` | Start of a speech clip (`bytes` ≤ 480000 = 15 s, even); PCM follows in `0x02` frames |
 | `say_end` | `id` | Clip complete; device plays it after any queued chime. Missing chunks play as silence |
 | `confirm_req` | `id`, `tool`, `summary`, `risk: low\|medium\|high`, `project` | Show permission modal |

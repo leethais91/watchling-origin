@@ -1,6 +1,7 @@
 /**
  * Follows Codex CLI rollout files (~/.codex/sessions/YYYY/MM/DD/*.jsonl) for
- * `token_count` events (rate limits) and `task_complete` events (turn finished).
+ * `token_count` events (rate limits), `task_started` / `turn_aborted` (working or not) and
+ * `task_complete` events (turn finished).
  * The format is undocumented, so every field is read defensively.
  */
 import { open, readdir, stat } from "node:fs/promises";
@@ -14,6 +15,7 @@ export const CODEX_SESSIONS_DIR = join(homedir(), ".codex", "sessions");
 export interface CodexWatcherHandlers {
   onRateLimits: (limits: CodexRateLimits) => void;
   onTaskComplete: (lastMessage: string) => void;
+  onActivity: (busy: boolean) => void;
 }
 
 interface FileCursor {
@@ -25,11 +27,11 @@ interface FileCursor {
 export async function startCodexSessionWatcher(handlers: CodexWatcherHandlers): Promise<void> {
   const cursors = new Map<string, FileCursor>();
 
-  // Seed usage from the newest file without replaying its old task_complete events.
+  // Seed usage from the newest file without replaying its old turn events.
   const newest = await findNewestRollout(CODEX_SESSIONS_DIR);
   if (newest) {
     const cursor: FileCursor = { offset: 0, remainder: "" };
-    await readAppended(newest, cursor, { ...handlers, onTaskComplete: () => {} });
+    await readAppended(newest, cursor, { ...handlers, onTaskComplete: () => {}, onActivity: () => {} });
     cursors.set(newest, cursor);
   }
 
@@ -85,6 +87,10 @@ function handleLine(line: string, handlers: CodexWatcherHandlers): void {
   } else if (payload.type === "task_complete") {
     const message = typeof payload.last_agent_message === "string" ? payload.last_agent_message : "";
     handlers.onTaskComplete(message);
+  } else if (payload.type === "task_started") {
+    handlers.onActivity(true);
+  } else if (payload.type === "turn_aborted") {
+    handlers.onActivity(false);
   }
 }
 

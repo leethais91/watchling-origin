@@ -43,6 +43,13 @@ export interface AgentEventMessage {
   text: string;
 }
 
+/** An agent started (busy) or stopped working without a turn-ending event. */
+export interface AgentActivityMessage {
+  t: "activity";
+  src: AgentSource;
+  busy: boolean;
+}
+
 /** Bridge → device */
 export type HostMessage =
   | { t: "hello" }
@@ -52,6 +59,7 @@ export type HostMessage =
   | SpeechBeginMessage
   | { t: "say_end"; id: number }
   | AgentEventMessage
+  | AgentActivityMessage
   | ConfirmRequestMessage
   | { t: "confirm_cancel"; id: number };
 
