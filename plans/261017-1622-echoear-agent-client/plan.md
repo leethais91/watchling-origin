@@ -15,6 +15,8 @@ Status: Phase 1 + Phase 2 done (verified on device 2026-10-17); Phase 3 next
   TTS made on the host (`pc-bridge/src/tts/`, macOS `say` behind a `TtsEngine` interface for a
   cloud engine later), streamed as `say` + `0x02` PCM frames + `say_end`, played after the chime.
 - Spoken: permission requests and finished tasks. Idle waits / errors: chime only.
+- Chimes replaced by ElevenLabs sound effects (cute-robot set) embedded in flash via
+  `tools/sound_effects.py`; ~150 KB. Free-plan ElevenLabs output is non-commercial + attribution.
 - Still open from Phase 4: mic (ES7210), ESP-SR AFE, MultiNet voice commands.
 
 ## Phase 2 findings (live test 2026-10-17)

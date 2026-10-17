@@ -1,5 +1,5 @@
 /*
- * Speaker output on the ES8311: short synthesized chimes plus speech clips streamed by
+ * Speaker output on the ES8311: short sci-fi sound effects from flash plus speech clips streamed by
  * the bridge (TTS runs on the host). One playback task plays everything in order, so a
  * chime and the phrase that follows it never overlap.
  */
@@ -10,14 +10,14 @@
 #include "esp_err.h"
 
 typedef enum {
-    AUDIO_CHIME_CONFIRM,   /* permission request: two rising notes */
-    AUDIO_CHIME_DONE,      /* task finished: major arpeggio */
-    AUDIO_CHIME_ATTENTION, /* waiting for input: repeated note */
-    AUDIO_CHIME_ERROR,     /* error: falling notes */
+    AUDIO_CHIME_CONFIRM,   /* permission request */
+    AUDIO_CHIME_DONE,      /* task finished */
+    AUDIO_CHIME_ATTENTION, /* waiting for input */
+    AUDIO_CHIME_ERROR,     /* error */
     AUDIO_CHIME_COUNT,
 } audio_chime_t;
 
-/* Opens the speaker codec, renders the chimes and starts playback. Call after bsp_display_start(). */
+/* Opens the speaker codec and starts playback. Call after bsp_display_start(). */
 esp_err_t audio_init(void);
 
 /* Queues a chime; non-blocking, safe from any task. No-op if audio_init() failed. */

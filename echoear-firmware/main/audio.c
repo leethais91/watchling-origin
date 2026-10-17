@@ -1,6 +1,5 @@
 #include "audio.h"
 
-#include <math.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -10,6 +9,7 @@
 #include "esp_log.h"
 #include "esp_codec_dev.h"
 #include "bsp/esp-bsp.h"
+#include "assets/sound_effects.h"
 
 static const char *TAG = "audio";
 
@@ -19,8 +19,6 @@ static const char *TAG = "audio";
 #define SPEECH_MAX_BYTES   (15 * SAMPLE_RATE * 2)
 #define PLAY_QUEUE_LEN     8
 #define PLAY_CHUNK_FRAMES  256
-#define CHIME_AMPLITUDE    7000.0f
-#define CHIME_MAX_NOTES    3
 
 typedef struct {
     const int16_t *pcm; /* mono */
@@ -28,62 +26,20 @@ typedef struct {
     bool owned;         /* heap clip to free after playing */
 } clip_t;
 
-typedef struct {
-    float freq_hz;
-    uint16_t start_ms;
-    uint16_t length_ms;
-} note_t;
-
-static const note_t CHIME_NOTES[AUDIO_CHIME_COUNT][CHIME_MAX_NOTES] = {
-    [AUDIO_CHIME_CONFIRM] = {{880.0f, 0, 260}, {1174.7f, 120, 320}},
-    [AUDIO_CHIME_DONE] = {{523.3f, 0, 320}, {659.3f, 90, 320}, {784.0f, 180, 420}},
-    [AUDIO_CHIME_ATTENTION] = {{784.0f, 0, 180}, {784.0f, 170, 220}},
-    [AUDIO_CHIME_ERROR] = {{440.0f, 0, 260}, {329.6f, 170, 380}},
+static const sound_effect_t *const CHIME_SOUNDS[AUDIO_CHIME_COUNT] = {
+    [AUDIO_CHIME_CONFIRM] = &SFX_CONFIRM,
+    [AUDIO_CHIME_DONE] = &SFX_DONE,
+    [AUDIO_CHIME_ATTENTION] = &SFX_ATTENTION,
+    [AUDIO_CHIME_ERROR] = &SFX_ERROR,
 };
 
 static esp_codec_dev_handle_t s_speaker;
 static QueueHandle_t s_queue;
-static clip_t s_chimes[AUDIO_CHIME_COUNT];
 
 /* Speech clip being received (host link RX task only). */
 static int16_t *s_rx_pcm;
 static size_t s_rx_bytes;
 static uint16_t s_rx_id;
-
-/* Bell-like notes: quick attack, exponential decay, a little second harmonic. */
-static esp_err_t chime_render(audio_chime_t chime)
-{
-    size_t total_ms = 0;
-    for (int n = 0; n < CHIME_MAX_NOTES; n++) {
-        const note_t *note = &CHIME_NOTES[chime][n];
-        if (note->freq_hz > 0 && note->start_ms + note->length_ms > total_ms) {
-            total_ms = note->start_ms + note->length_ms;
-        }
-    }
-    size_t samples = SAMPLE_RATE * total_ms / 1000;
-    int16_t *pcm = heap_caps_calloc(samples, sizeof(int16_t), MALLOC_CAP_SPIRAM);
-    ESP_RETURN_ON_FALSE(pcm, ESP_ERR_NO_MEM, TAG, "no memory for chime");
-
-    for (int n = 0; n < CHIME_MAX_NOTES; n++) {
-        const note_t *note = &CHIME_NOTES[chime][n];
-        if (note->freq_hz <= 0) {
-            continue;
-        }
-        size_t start = SAMPLE_RATE * note->start_ms / 1000;
-        size_t length = SAMPLE_RATE * note->length_ms / 1000;
-        for (size_t i = 0; i < length && start + i < samples; i++) {
-            float t = (float)i / SAMPLE_RATE;
-            float attack = fminf(1.0f, t / 0.005f);
-            float envelope = attack * expf(-6.0f * t / (note->length_ms / 1000.0f));
-            float phase = 2.0f * (float)M_PI * note->freq_hz * t;
-            float value = (sinf(phase) + 0.25f * sinf(2.0f * phase)) * envelope * CHIME_AMPLITUDE;
-            int32_t mixed = pcm[start + i] + (int32_t)value;
-            pcm[start + i] = (int16_t)(mixed > INT16_MAX ? INT16_MAX : mixed < INT16_MIN ? INT16_MIN : mixed);
-        }
-    }
-    s_chimes[chime] = (clip_t){.pcm = pcm, .samples = samples, .owned = false};
-    return ESP_OK;
-}
 
 /* The BSP configures I2S as stereo, so mono clips go out as duplicated L/R frames. */
 static void clip_play(const clip_t *clip)
@@ -137,10 +93,6 @@ esp_err_t audio_init(void)
     ESP_RETURN_ON_FALSE(esp_codec_dev_open(s_speaker, &fs) == ESP_CODEC_DEV_OK, ESP_FAIL, TAG, "codec open failed");
     esp_codec_dev_set_out_vol(s_speaker, SPEAKER_VOLUME);
 
-    for (int c = 0; c < AUDIO_CHIME_COUNT; c++) {
-        ESP_RETURN_ON_ERROR(chime_render((audio_chime_t)c), TAG, "chime render failed");
-    }
-
     s_queue = xQueueCreate(PLAY_QUEUE_LEN, sizeof(clip_t));
     ESP_RETURN_ON_FALSE(s_queue, ESP_ERR_NO_MEM, TAG, "queue create failed");
     ESP_RETURN_ON_FALSE(xTaskCreate(playback_task, "audio_play", 4096, NULL, 5, NULL) == pdPASS,
@@ -150,8 +102,10 @@ esp_err_t audio_init(void)
 
 void audio_play_chime(audio_chime_t chime)
 {
-    if (chime < AUDIO_CHIME_COUNT && s_chimes[chime].pcm != NULL) {
-        enqueue(&s_chimes[chime]);
+    if (chime < AUDIO_CHIME_COUNT) {
+        const sound_effect_t *sfx = CHIME_SOUNDS[chime];
+        clip_t clip = {.pcm = sfx->pcm, .samples = sfx->samples, .owned = false};
+        enqueue(&clip);
     }
 }
 

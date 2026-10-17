@@ -16,3 +16,6 @@ pc-bridge/dist/
 
 # Dashboard simulator
 echoear-firmware/simulator/cmake-out/
+
+# Sound effect candidates (tools/sound_effects.py generate)
+echoear-firmware/tools/sfx-candidates/

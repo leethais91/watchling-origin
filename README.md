@@ -24,6 +24,18 @@ agent event, and a touch Approve/Deny modal for Claude Code permission requests.
 
 If the board doesn't show up as a USB port, hold **BOOT** while plugging in USB-C.
 
+### Sound effects
+
+The four UI sounds (`main/assets/sounds/`, cute-robot style) were generated with the ElevenLabs
+Sound Effects API and are compiled into flash. To make new ones (needs `ELEVENLABS_API_KEY`):
+
+```sh
+cd echoear-firmware
+python3 tools/sound_effects.py generate --style robot      # or scifi; see STYLES in the script
+open tools/sfx-candidates/index.html                       # listen and pick
+python3 tools/sound_effects.py embed confirm=robot:2 done=robot:1 attention=robot:1 error=robot:1
+```
+
 ### Dashboard simulator
 
 The idle dashboard (`main/agent_dashboard.c`) is plain LVGL, so it also builds on the host
