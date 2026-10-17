@@ -1,7 +1,7 @@
 /*
  * EchoEar (ESP-VoCat V1.2) agent display: shows Claude Code / Codex usage and lets
- * the user answer Claude Code permission requests by touch. Messages arrive from
- * pc-bridge over USB; see docs/device-protocol.md.
+ * the user answer Claude Code / Codex permission requests by touch. Messages arrive from
+ * pc-bridge over USB or BLE; see docs/device-protocol.md.
  */
 #include <stdio.h>
 #include <string.h>
@@ -11,23 +11,21 @@
 #include "freertos/task.h"
 #include "cJSON.h"
 #include "esp_app_desc.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "nvs_flash.h"
 #include "bsp/esp-bsp.h"
 
 #include "audio.h"
 #include "battery.h"
+#include "ble_link.h"
 #include "host_link.h"
 #include "ui.h"
 
 static const char *TAG = "app";
 
 #define BATTERY_POLL_US  (30 * 1000 * 1000)
-
-/* The bridge pings every 2 s; consider it gone after a few missed pings. */
-#define HOST_TIMEOUT_US  (5 * 1000 * 1000)
-
-static volatile int64_t s_last_host_us;
 
 /* esp_timer task; one short I2C transaction pair every 30 s. */
 static void battery_poll(void *arg)
@@ -59,9 +57,20 @@ static void battery_start(void)
     }
 }
 
-static bool host_is_linked(void)
+static ui_link_state_t link_state(void)
 {
-    return s_last_host_us != 0 && esp_timer_get_time() - s_last_host_us < HOST_TIMEOUT_US;
+    return (ui_link_state_t){.usb = host_link_alive(HOST_LINK_USB), .ble = host_link_alive(HOST_LINK_BLE)};
+}
+
+/* Bonds live in NVS; a full or older-format partition is wiped (only bonds are lost). */
+static esp_err_t nvs_start(void)
+{
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    return err;
 }
 
 static void send_hello(void)
@@ -166,7 +175,6 @@ static void on_host_message(const char *json, size_t len)
         ESP_LOGW(TAG, "Malformed JSON from host");
         return;
     }
-    s_last_host_us = esp_timer_get_time();
 
     const char *type = json_str(msg, "t");
     if (strcmp(type, "ping") == 0) {
@@ -207,7 +215,7 @@ void app_main(void)
         return;
     }
     bsp_display_backlight_on();
-    ui_init(on_decision, host_is_linked);
+    ui_init(on_decision, link_state);
     battery_start();
 
     if (audio_init() != ESP_OK) {
@@ -215,6 +223,12 @@ void app_main(void)
     }
 
     ESP_ERROR_CHECK(host_link_start(on_host_message, on_host_audio));
+    if (nvs_start() != ESP_OK || ble_link_start(host_link_ble_rx, ui_show_pairing) != ESP_OK) {
+        ESP_LOGE(TAG, "Bluetooth unavailable; USB only");
+    }
+    ESP_LOGI(TAG, "Free internal RAM: %u KB (largest block %u KB)",
+             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
     /* Announce ourselves in case the bridge is already connected (e.g. after a reset). */
     send_hello();
 }

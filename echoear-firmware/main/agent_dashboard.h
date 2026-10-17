@@ -28,10 +28,10 @@ typedef struct {
 
     float daily_cost; /* < 0 when unknown */
 
-    /* Wi-Fi and BLE icons show only while connected (neither radio exists yet). */
+    /* Wi-Fi and BLE icons show only while connected (there is no Wi-Fi yet). */
     bool wifi_connected;
-    bool ble_connected;
-    bool host_linked;    /* USB bridge answering pings */
+    bool ble_connected;  /* bridge answering pings over BLE */
+    bool host_linked;    /* bridge answering pings over USB */
     int battery_percent; /* -1 hides the battery indicator */
     bool battery_charging;
 

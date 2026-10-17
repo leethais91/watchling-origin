@@ -1,7 +1,18 @@
 # Device protocol (pc-bridge ⇄ EchoEar firmware)
 
-Transport: ESP32-S3 built-in USB-Serial-JTAG (`/dev/cu.usbmodem*`, VID `303a`).
-ESP log text shares the port with protocol frames.
+Transports, both carrying the same framed byte stream:
+
+- **USB:** ESP32-S3 built-in USB-Serial-JTAG (`/dev/cu.usbmodem*`, VID `303a`). ESP log text shares
+  the port with protocol frames.
+- **BLE:** Nordic UART Service `6E400001-B5A3-F393-E0A9-E50E24DCCA9E`, device name `EchoEar`.
+  RX `…0002` (bridge writes, with response, in ≤ 180-byte chunks), TX `…0003` (device notifies,
+  MTU-sized chunks). RX needs an encrypted, MITM-authenticated link: LESC passkey pairing,
+  the device shows the 6-digit code, bonds persist in NVS. Unauthenticated links are dropped.
+  No speech over BLE (`say` / audio frames are USB only); chimes still play.
+
+The device sends every frame on all connected links. The bridge talks on one link at a time
+(USB if it answers, else BLE), ignores the other link's frames, and sends `hello` when it
+switches so the device's reply triggers a re-sync.
 
 ## Framing
 

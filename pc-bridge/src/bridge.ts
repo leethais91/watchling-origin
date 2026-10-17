@@ -1,8 +1,9 @@
 /**
  * Bridge daemon: connects Claude Code hooks/statusline (IPC socket) and Codex session
- * files to the EchoEar device over USB.
+ * files to the EchoEar device over USB, or BLE when the cable is out.
  *
  *   ECHOEAR_PORT=/dev/cu.usbmodemXXXX  skip auto-detection
+ *   ECHOEAR_BLE=off                    USB only (no Bluetooth permission needed)
  *   ECHOEAR_CONFIRM_TIMEOUT_S=120      how long a request waits on the device
  *   ECHOEAR_TTS / ECHOEAR_TTS_VOICE    spoken announcements, see tts/tts-engine.ts
  */
@@ -10,10 +11,13 @@ import { clockMessage } from "./clock/clock-message.js";
 import { startIpcServer } from "./ipc/ipc-server.js";
 import { SOCKET_PATH } from "./ipc/paths.js";
 import { PermissionBroker } from "./permission/permission-broker.js";
-import type { AgentEventMessage } from "./protocol/messages.js";
+import type { AgentEventMessage, HostMessage } from "./protocol/messages.js";
 import { Speaker } from "./speech/speaker.js";
 import { doneSpeech, permissionSpeech } from "./speech/speech-text.js";
+import { BleTransport } from "./transport/ble-transport.js";
+import type { DeviceLink } from "./transport/device-link.js";
 import { SerialTransport } from "./transport/serial-transport.js";
+import { TransportHub } from "./transport/transport-hub.js";
 import { createTtsEngine } from "./tts/tts-engine.js";
 import { startCodexSessionWatcher } from "./usage/codex-session-watcher.js";
 import { UsageStore } from "./usage/usage-store.js";
@@ -27,10 +31,21 @@ const CLOCK_RESYNC_MS = 10 * 60 * 1000;
 
 const log = (...args: unknown[]) => console.log(new Date().toLocaleTimeString(), ...args);
 
-const transport = new SerialTransport(process.env.ECHOEAR_PORT);
+const usb = new SerialTransport(process.env.ECHOEAR_PORT);
+const links: { name: string; link: DeviceLink }[] = [{ name: "USB", link: usb }];
+if (process.env.ECHOEAR_BLE !== "off") links.push({ name: "BLE", link: new BleTransport() });
+const transport = new TransportHub(links);
 const usage = new UsageStore();
 const tts = createTtsEngine();
-const speaker = tts && new Speaker(tts, transport, (err) => log(`speech failed: ${err.message}`));
+/** Speech clips are raw PCM: USB only. Over BLE the device still chimes. */
+const speechLink = {
+  get alive() {
+    return transport.active === usb && usb.alive;
+  },
+  send: (msg: HostMessage) => transport.send(msg),
+  sendAudio: (payload: Uint8Array) => transport.sendAudio(payload),
+};
+const speaker = tts && new Speaker(tts, speechLink, (err) => log(`speech failed: ${err.message}`));
 const broker = new PermissionBroker((msg) => {
   const sent = transport.send(msg);
   if (sent && msg.t === "confirm_req") void speaker?.say(permissionSpeech(msg));
@@ -51,9 +66,9 @@ usage.on("change", () => {
   }, USAGE_THROTTLE_MS);
 });
 
-transport.on("connected", (path) => log(`device port open: ${path}`));
+transport.on("connected", (name) => log(`talking to the device over ${name}`));
 transport.on("disconnected", () => {
-  log("device disconnected");
+  log("device unreachable");
   broker.cancelAll();
 });
 transport.on("log", (line) => log("[device]", line));

@@ -41,3 +41,28 @@ CONFIG_LV_FONT_MONTSERRAT_16=y
 CONFIG_LV_FONT_MONTSERRAT_20=y
 CONFIG_LV_FONT_MONTSERRAT_28=y
 CONFIG_LV_BUILD_EXAMPLES=n
+
+# Bluetooth LE link to pc-bridge (main/ble_link.c): NimBLE peripheral, one bonded host.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
+# CONFIG_BT_NIMBLE_ROLE_CENTRAL is not set
+# CONFIG_BT_NIMBLE_ROLE_OBSERVER is not set
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_MAX_BONDS=3
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+CONFIG_BT_NIMBLE_SECURITY_ENABLE=y
+CONFIG_BT_NIMBLE_SM_SC=y
+# LESC only: legacy pairing has no protection against a passive eavesdropper.
+# CONFIG_BT_NIMBLE_SM_LEGACY is not set
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
+# Keep internal RAM for DMA and LVGL; the host's buffers live in PSRAM.
+CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL=y
+CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
+# One advertiser + one connection; fewer controller activities means less internal RAM.
+CONFIG_BT_CTRL_BLE_MAX_ACT=3
+
+# LVGL draw buffers are DMA-capable internal RAM (2 x 360 x 60 x 2 B = 84 KB). The BSP default
+# of 100 lines no longer fits next to the BT controller; the dashboard mostly redraws small areas.
+CONFIG_BSP_LCD_DRAW_BUF_HEIGHT=60

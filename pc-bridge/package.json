@@ -20,6 +20,7 @@
     "hooks:uninstall:codex": "node dist/install-hooks.js uninstall --codex"
   },
   "dependencies": {
+    "@stoprocent/noble": "^2.8.0",
     "serialport": "^13.0.0"
   },
   "devDependencies": {

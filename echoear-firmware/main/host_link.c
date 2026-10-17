@@ -8,6 +8,8 @@
 #include "driver/usb_serial_jtag_vfs.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_timer.h"
+#include "ble_link.h"
 #include "frame_codec.h"
 
 static const char *TAG = "host_link";
@@ -18,63 +20,81 @@ static const char *TAG = "host_link";
 #define LINK_RX_BUFFER      4096
 #define LINK_TX_TIMEOUT_MS  100
 #define RX_TASK_STACK       6144
+/* The bridge pings every 2 s; consider a link gone after a few missed pings. */
+#define LINK_TIMEOUT_US     (5 * 1000 * 1000)
+
+/* Frame assembly state for one link; only touched by that link's RX task. */
+typedef struct {
+    host_link_t link;
+    uint8_t raw[FRAME_COBS_MAX_ENCODED(FRAME_MAX_BYTES)];
+    uint8_t body[FRAME_COBS_MAX_ENCODED(FRAME_MAX_BYTES) + 1];
+    size_t raw_len;
+    bool overflow;
+} frame_rx_t;
 
 static host_link_rx_cb_t s_on_message;
 static host_link_audio_cb_t s_on_audio;
 static SemaphoreHandle_t s_tx_lock;
-
-/* RX frame assembly (RX task only). */
-static uint8_t s_rx_raw[FRAME_COBS_MAX_ENCODED(FRAME_MAX_BYTES)];
-static uint8_t s_rx_body[FRAME_COBS_MAX_ENCODED(FRAME_MAX_BYTES) + 1];
+static frame_rx_t s_rx[HOST_LINK_COUNT] = {
+    [HOST_LINK_USB] = {.link = HOST_LINK_USB},
+    [HOST_LINK_BLE] = {.link = HOST_LINK_BLE},
+};
+static volatile int64_t s_last_rx_us[HOST_LINK_COUNT];
 
 /* TX scratch (guarded by s_tx_lock). */
 static uint8_t s_tx_body[FRAME_MAX_BYTES];
 static uint8_t s_tx_frame[FRAME_COBS_MAX_ENCODED(FRAME_MAX_BYTES) + 2];
 
-static void handle_raw_frame(size_t raw_len)
+static void handle_raw_frame(frame_rx_t *rx)
 {
-    size_t body_len = frame_cobs_decode(s_rx_raw, raw_len, s_rx_body);
+    size_t body_len = frame_cobs_decode(rx->raw, rx->raw_len, rx->body);
     if (body_len < 3) {
         return;
     }
-    uint16_t crc = (uint16_t)(s_rx_body[body_len - 2] << 8) | s_rx_body[body_len - 1];
-    if (frame_crc16(s_rx_body, body_len - 2) != crc) {
+    uint16_t crc = (uint16_t)(rx->body[body_len - 2] << 8) | rx->body[body_len - 1];
+    if (frame_crc16(rx->body, body_len - 2) != crc) {
         ESP_LOGW(TAG, "Dropped frame with bad CRC");
         return;
     }
-    if (s_rx_body[0] == FRAME_TYPE_AUDIO) {
-        s_on_audio(&s_rx_body[1], body_len - 3);
+    s_last_rx_us[rx->link] = esp_timer_get_time();
+    if (rx->body[0] == FRAME_TYPE_AUDIO) {
+        s_on_audio(&rx->body[1], body_len - 3);
         return;
     }
-    if (s_rx_body[0] != FRAME_TYPE_JSON) {
+    if (rx->body[0] != FRAME_TYPE_JSON) {
         return;
     }
     size_t json_len = body_len - 3;
-    char *json = (char *)&s_rx_body[1];
+    char *json = (char *)&rx->body[1];
     json[json_len] = '\0'; /* overwrites the CRC, already checked */
     s_on_message(json, json_len);
 }
 
-static void rx_task(void *arg)
+/* Frames are delimited by 0x00 on both links. */
+static void frame_rx_feed(frame_rx_t *rx, const uint8_t *data, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        if (data[i] == 0) {
+            if (rx->raw_len > 0 && !rx->overflow) {
+                handle_raw_frame(rx);
+            }
+            rx->raw_len = 0;
+            rx->overflow = false;
+        } else if (rx->raw_len < sizeof(rx->raw)) {
+            rx->raw[rx->raw_len++] = data[i];
+        } else {
+            rx->overflow = true; /* drop until the next delimiter */
+        }
+    }
+}
+
+static void usb_rx_task(void *arg)
 {
     uint8_t chunk[256];
-    size_t raw_len = 0;
-    bool overflow = false;
-
     for (;;) {
         int n = usb_serial_jtag_read_bytes(chunk, sizeof(chunk), portMAX_DELAY);
-        for (int i = 0; i < n; i++) {
-            if (chunk[i] == 0) {
-                if (raw_len > 0 && !overflow) {
-                    handle_raw_frame(raw_len);
-                }
-                raw_len = 0;
-                overflow = false;
-            } else if (raw_len < sizeof(s_rx_raw)) {
-                s_rx_raw[raw_len++] = chunk[i];
-            } else {
-                overflow = true; /* drop until the next delimiter */
-            }
+        if (n > 0) {
+            frame_rx_feed(&s_rx[HOST_LINK_USB], chunk, (size_t)n);
         }
     }
 }
@@ -96,16 +116,27 @@ esp_err_t host_link_start(host_link_rx_cb_t on_message, host_link_audio_cb_t on_
     /* Route console/log output through the same driver so it cannot race our frame writes in the FIFO. */
     usb_serial_jtag_vfs_use_driver();
 
-    if (xTaskCreate(rx_task, "host_link_rx", RX_TASK_STACK, NULL, 6, NULL) != pdPASS) {
+    if (xTaskCreate(usb_rx_task, "host_link_rx", RX_TASK_STACK, NULL, 6, NULL) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;
 }
 
+void host_link_ble_rx(const uint8_t *data, size_t len)
+{
+    frame_rx_feed(&s_rx[HOST_LINK_BLE], data, len);
+}
+
+bool host_link_alive(host_link_t link)
+{
+    int64_t last = s_last_rx_us[link];
+    return last != 0 && esp_timer_get_time() - last < LINK_TIMEOUT_US;
+}
+
 bool host_link_send_json(const char *json)
 {
     size_t json_len = strlen(json);
-    if (json_len + 3 > FRAME_MAX_BYTES || !usb_serial_jtag_is_connected()) {
+    if (json_len + 3 > FRAME_MAX_BYTES) {
         return false;
     }
 
@@ -120,8 +151,12 @@ bool host_link_send_json(const char *json)
     size_t encoded = frame_cobs_encode(s_tx_body, json_len + 3, &s_tx_frame[1]);
     s_tx_frame[encoded + 1] = 0;
     size_t total = encoded + 2;
-    int written = usb_serial_jtag_write_bytes(s_tx_frame, total, pdMS_TO_TICKS(LINK_TX_TIMEOUT_MS));
-    xSemaphoreGive(s_tx_lock);
 
-    return written == (int)total;
+    bool sent = false;
+    if (usb_serial_jtag_is_connected()) {
+        sent |= usb_serial_jtag_write_bytes(s_tx_frame, total, pdMS_TO_TICKS(LINK_TX_TIMEOUT_MS)) == (int)total;
+    }
+    sent |= ble_link_send(s_tx_frame, total);
+    xSemaphoreGive(s_tx_lock);
+    return sent;
 }

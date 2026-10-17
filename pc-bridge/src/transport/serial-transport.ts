@@ -5,16 +5,21 @@
 import { EventEmitter } from "node:events";
 import { setTimeout as sleep } from "node:timers/promises";
 import { SerialPort } from "serialport";
-import { FrameDecoder, FrameType, encodeFrame } from "../protocol/frame-codec.js";
-import type { DeviceMessage, HostMessage } from "../protocol/messages.js";
+import { FrameType, encodeFrame } from "../protocol/frame-codec.js";
+import type { HostMessage } from "../protocol/messages.js";
+import {
+  ALIVE_WINDOW_MS,
+  PING_INTERVAL_MS,
+  createFrameReader,
+  encodeJsonFrame,
+  type DeviceLink,
+  type LinkEvents,
+} from "./device-link.js";
 
 /** USB vendor ID assigned to Espressif (ESP32-S3 USB-Serial-JTAG enumerates with it). */
 export const ESPRESSIF_VENDOR_ID = "303a";
 
 const RECONNECT_INTERVAL_MS = 2000;
-const PING_INTERVAL_MS = 2000;
-/** Device counts as alive if it answered within this window. */
-const ALIVE_WINDOW_MS = 5000;
 
 export async function findDevicePath(): Promise<string | null> {
   const ports = await SerialPort.list();
@@ -24,14 +29,7 @@ export async function findDevicePath(): Promise<string | null> {
   return process.platform === "darwin" ? device.path.replace("/dev/tty.", "/dev/cu.") : device.path;
 }
 
-interface TransportEvents {
-  message: [DeviceMessage];
-  log: [string];
-  connected: [string];
-  disconnected: [];
-}
-
-export class SerialTransport extends EventEmitter<TransportEvents> {
+export class SerialTransport extends EventEmitter<LinkEvents> implements DeviceLink {
   private port: SerialPort | null = null;
   private lastSeenMs = 0;
   private stopped = false;
@@ -51,8 +49,7 @@ export class SerialTransport extends EventEmitter<TransportEvents> {
 
   send(msg: HostMessage): boolean {
     if (!this.port?.isOpen) return false;
-    // NFC: the device font has precomposed letters only (Vietnamese "ế", not "e" + two marks).
-    this.port.write(encodeFrame(FrameType.Json, Buffer.from(JSON.stringify(msg).normalize("NFC"), "utf8")));
+    this.port.write(encodeJsonFrame(msg));
     return true;
   }
 
@@ -84,24 +81,14 @@ export class SerialTransport extends EventEmitter<TransportEvents> {
 
   private open(path: string): Promise<void> {
     const port = new SerialPort({ path, baudRate: 115200, autoOpen: false });
-    const decoder = new FrameDecoder();
-
-    port.on("data", (data: Buffer) => {
-      for (const chunk of decoder.push(data)) {
-        if (chunk.kind === "text") {
-          for (const line of chunk.text.split(/\r?\n/)) if (line.trim()) this.emit("log", line);
-          continue;
-        }
-        if (chunk.type !== FrameType.Json) continue;
-        try {
-          const msg = JSON.parse(Buffer.from(chunk.payload).toString("utf8")) as DeviceMessage;
-          this.lastSeenMs = Date.now();
-          this.emit("message", msg);
-        } catch {
-          this.emit("log", "dropped malformed JSON frame");
-        }
-      }
-    });
+    const read = createFrameReader(
+      (msg) => {
+        this.lastSeenMs = Date.now();
+        this.emit("message", msg);
+      },
+      (line) => this.emit("log", line),
+    );
+    port.on("data", read);
 
     port.on("close", () => {
       this.port = null;

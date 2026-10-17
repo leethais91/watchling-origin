@@ -5,6 +5,7 @@
  *   --stress                          worst-case values (long status, 100%, big cost, low battery)
  *   --unknown                         every value unknown, as at boot before the bridge reports
  *   --confirm                         firmware UI (ui.c) with the permission modal open
+ *   --pairing                         firmware UI with the Bluetooth passkey screen
  *   --mood NAME                       robot mood: idle busy sleep happy attention error
  *   --after-ms N                      with --shot: let animations run N ms before capturing
  */
@@ -80,9 +81,9 @@ static void sim_decision(uint32_t id, bool approve)
     printf("decision #%u: %s\n", (unsigned)id, approve ? "approve" : "deny");
 }
 
-static bool sim_link_probe(void)
+static ui_link_state_t sim_link_probe(void)
 {
-    return true;
+    return (ui_link_state_t){.usb = true, .ble = true};
 }
 
 static int write_ppm(const char *path)
@@ -130,6 +131,7 @@ int main(int argc, char **argv)
     bool stress = false;
     bool unknown = false;
     bool confirm = false;
+    bool pairing = false;
     uint32_t after_ms = 0;
     int mood = -1;
     for (int i = 1; i < argc; i++) {
@@ -141,12 +143,14 @@ int main(int argc, char **argv)
             unknown = true;
         } else if (strcmp(argv[i], "--confirm") == 0) {
             confirm = true;
+        } else if (strcmp(argv[i], "--pairing") == 0) {
+            pairing = true;
         } else if (strcmp(argv[i], "--mood") == 0 && i + 1 < argc && (mood = mood_from_name(argv[++i])) >= 0) {
             continue;
         } else if (strcmp(argv[i], "--after-ms") == 0 && i + 1 < argc) {
             after_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
         } else {
-            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown | --confirm] [--mood NAME]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown | --confirm | --pairing] [--mood NAME]\n", argv[0]);
             return 2;
         }
     }
@@ -161,6 +165,12 @@ int main(int argc, char **argv)
     } else {
         lv_sdl_window_create(HOR_RES, VER_RES);
         lv_sdl_mouse_create();
+    }
+
+    if (pairing) {
+        ui_init(sim_decision, sim_link_probe);
+        ui_show_pairing(true, 48213);
+        return shot_path != NULL ? render_shot(shot_path, after_ms) : run_window();
     }
 
     if (confirm) {

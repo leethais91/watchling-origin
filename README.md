@@ -61,7 +61,8 @@ cd echoear-firmware/simulator
 
 On the device, usage, cost, status, clock/date and the USB link icon come from the bridge
 (the clock shows `--:--` until the first sync). Battery comes from the BQ27220 fuel gauge
-(hidden if it does not answer); Wi-Fi/BLE icons stay hidden until those radios exist.
+(hidden if it does not answer). The BLE icon shows while the bridge answers over Bluetooth;
+the Wi-Fi icon stays hidden (no Wi-Fi yet).
 
 ## PC bridge
 
@@ -84,6 +85,10 @@ How it behaves:
   pings. Otherwise Claude Code shows its normal terminal prompt immediately.
 - While a request is on the device, the Claude Code terminal waits (spinner). Unanswered
   requests fall back to the terminal after `ECHOEAR_CONFIRM_TIMEOUT_S` (default 120).
+- Bluetooth: the bridge also connects over BLE and uses it when the USB cable is out (battery).
+  First time, the device shows a 6-digit code and macOS asks for it; after that it reconnects on
+  its own. macOS asks to allow Bluetooth for the terminal app running the bridge. Speech is
+  USB-only (chimes still play over BLE). `ECHOEAR_BLE=off` keeps the bridge on USB only.
 - Codex usage, working and "done" events come from `~/.codex/sessions` with no Codex config.
   Approve/Deny for Codex needs `npm run hooks:install:codex` (Codex hooks, 0.162+); Codex asks you
   to trust the new hook once. The modal is titled with the agent that asks.

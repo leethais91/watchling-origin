@@ -38,6 +38,9 @@
 #define SUMMARY_Y         92
 #define RING_PULSE_MS     500
 #define STATUS_POLL_MS    1000
+#define COLOR_PAIRING     0x167DFF
+#define PAIRING_TITLE_Y   -52
+#define PAIRING_HINT_Y    46
 /* Claude Code fires no hook when a turn is interrupted, so a busy flag also runs out. */
 #define BUSY_TIMEOUT_MS   (15 * 60 * 1000)
 #define HAPPY_MS          4000
@@ -55,6 +58,12 @@ static bool s_clock_synced;
 static int s_utc_offset_min;
 /* lv_tick of the latest "busy" per agent; 0 = idle. */
 static uint32_t s_busy_since[AGENT_COUNT];
+
+/* Bridge answering on USB or BLE; asleep otherwise. */
+static bool s_bridge_linked;
+
+static lv_obj_t *s_pairing;
+static lv_obj_t *s_pairing_code;
 
 static lv_obj_t *s_modal;
 static lv_obj_t *s_modal_title;
@@ -177,6 +186,42 @@ static void modal_show(uint32_t id, const char *agent_name, const char *tool, co
     s_modal_visible = true;
 }
 
+/* ---------- Bluetooth pairing ---------- */
+
+/* Covers everything, the confirm modal included: pairing needs the user's full attention. */
+static void pairing_create(void)
+{
+    s_pairing = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(s_pairing, BSP_LCD_H_RES, BSP_LCD_V_RES);
+    lv_obj_center(s_pairing);
+    lv_obj_set_style_radius(s_pairing, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(s_pairing, lv_color_hex(COLOR_BG), 0);
+    lv_obj_set_style_bg_opa(s_pairing, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_pairing, MODAL_RING_PX, 0);
+    lv_obj_set_style_border_color(s_pairing, lv_color_hex(COLOR_PAIRING), 0);
+    lv_obj_set_style_pad_all(s_pairing, 0, 0);
+    lv_obj_set_scrollable(s_pairing, false);
+
+    lv_obj_t *title = lv_label_create(s_pairing);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(COLOR_PAIRING), 0);
+    lv_label_set_text(title, LV_SYMBOL_BLUETOOTH " Pairing");
+    lv_obj_align(title, LV_ALIGN_CENTER, 0, PAIRING_TITLE_Y);
+
+    s_pairing_code = lv_label_create(s_pairing);
+    lv_obj_set_style_text_font(s_pairing_code, &font_dash_bold_30, 0);
+    lv_obj_set_style_text_color(s_pairing_code, lv_color_white(), 0);
+    lv_obj_set_style_text_letter_space(s_pairing_code, 4, 0);
+    lv_obj_align(s_pairing_code, LV_ALIGN_CENTER, 0, 0);
+
+    lv_obj_t *hint = lv_label_create(s_pairing);
+    lv_obj_set_style_text_color(hint, lv_color_hex(COLOR_MUTED), 0);
+    lv_label_set_text(hint, "Type this code on your Mac");
+    lv_obj_align(hint, LV_ALIGN_CENTER, 0, PAIRING_HINT_Y);
+
+    lv_obj_set_hidden(s_pairing, true);
+}
+
 static void clock_format(void)
 {
     time_t local = time(NULL) + (time_t)s_utc_offset_min * 60;
@@ -221,14 +266,17 @@ static void robot_base_update(void)
         }
         busy |= s_busy_since[i] != 0;
     }
-    robot_face_set_base(!s_dash.host_linked ? ROBOT_MOOD_SLEEP : busy ? ROBOT_MOOD_BUSY : ROBOT_MOOD_IDLE);
+    robot_face_set_base(!s_bridge_linked ? ROBOT_MOOD_SLEEP : busy ? ROBOT_MOOD_BUSY : ROBOT_MOOD_IDLE);
 }
 
 /* Runs every second in the LVGL task; the dashboard only redraws what changed. */
 static void status_timer_cb(lv_timer_t *timer)
 {
-    bool linked = s_link_probe();
-    s_dash.host_linked = linked;
+    ui_link_state_t link = s_link_probe();
+    bool linked = link.usb || link.ble;
+    s_bridge_linked = linked;
+    s_dash.host_linked = link.usb;
+    s_dash.ble_connected = link.ble;
     if (s_clock_synced) {
         clock_format();
     }
@@ -259,6 +307,7 @@ void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe)
     agent_dashboard_update(&s_dash);
     robot_base_update();
     modal_create();
+    pairing_create();
     lv_timer_create(status_timer_cb, STATUS_POLL_MS, NULL);
     bsp_display_unlock();
 }
@@ -353,5 +402,17 @@ void ui_cancel_confirm(uint32_t id)
     if (s_modal_visible && s_modal_id == id) {
         modal_hide();
     }
+    bsp_display_unlock();
+}
+
+void ui_show_pairing(bool active, uint32_t passkey)
+{
+    bsp_display_lock(0);
+    if (active) {
+        char code[8];
+        snprintf(code, sizeof(code), "%06lu", (unsigned long)passkey);
+        lv_label_set_text(s_pairing_code, code);
+    }
+    lv_obj_set_hidden(s_pairing, !active);
     bsp_display_unlock();
 }
