@@ -5,22 +5,19 @@
 #include "bsp/esp-bsp.h"
 #include "lvgl.h"
 
+#include "agent_dashboard.h"
+
 /*
- * Layout rules for the round panel: nothing in the square corners. The usage arcs hug
- * the edge (left = Claude, right = Codex) and everything else stays inside a ~150px
- * radius from the center.
+ * The idle dashboard lives in agent_dashboard.c; this file owns the confirm modal and
+ * feeds the dashboard from the bridge. s_dash is only touched under the display lock.
  */
 
 #define COLOR_BG          0x0B0F19
-#define COLOR_ARC_TRACK   0x1F2937
 #define COLOR_MUTED       0x9CA3AF
-#define COLOR_CLAUDE      0xD97757
-#define COLOR_CODEX       0x10A37F
 #define COLOR_OK          0x22C55E
 #define COLOR_WARN        0xF59E0B
 #define COLOR_DANGER      0xEF4444
 
-#define ARC_WIDTH_PX      10
 #define MODAL_RING_PX     8
 #define BUTTON_W          112
 #define BUTTON_H          60
@@ -32,13 +29,8 @@
 static ui_decision_cb_t s_on_decision;
 static ui_link_probe_t s_link_probe;
 
-static lv_obj_t *s_claude_arc;
-static lv_obj_t *s_codex_arc;
-static lv_obj_t *s_claude_label;
-static lv_obj_t *s_codex_label;
-static lv_obj_t *s_cost_label;
-static lv_obj_t *s_status_label;
-static lv_obj_t *s_link_label;
+/* Clock, date, Wi-Fi, BLE and battery stay on mock values until those providers exist. */
+static agent_dashboard_data_t s_dash;
 
 static lv_obj_t *s_modal;
 static lv_obj_t *s_modal_title;
@@ -46,93 +38,6 @@ static lv_obj_t *s_modal_tool;
 static lv_obj_t *s_modal_summary;
 static uint32_t s_modal_id;
 static bool s_modal_visible;
-
-/* ---------- dashboard ---------- */
-
-static lv_obj_t *usage_arc_create(lv_obj_t *parent, uint16_t start_deg, uint16_t end_deg,
-                                  uint32_t color, lv_arc_mode_t mode)
-{
-    /* LVGL angles start at 3 o'clock and grow clockwise: 135..225 is the left edge. */
-    lv_obj_t *arc = lv_arc_create(parent);
-    lv_obj_set_size(arc, BSP_LCD_H_RES, BSP_LCD_V_RES);
-    lv_obj_center(arc);
-    lv_arc_set_bg_angles(arc, start_deg, end_deg);
-    lv_arc_set_mode(arc, mode);
-    lv_arc_set_range(arc, 0, 100);
-    lv_arc_set_value(arc, 0);
-    lv_obj_remove_style(arc, NULL, LV_PART_KNOB);
-    lv_obj_set_clickable(arc, false);
-    lv_obj_set_style_arc_width(arc, ARC_WIDTH_PX, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(arc, ARC_WIDTH_PX, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_color(arc, lv_color_hex(COLOR_ARC_TRACK), LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc, lv_color_hex(color), LV_PART_INDICATOR);
-    return arc;
-}
-
-static lv_obj_t *side_label_create(lv_obj_t *parent, lv_align_t align, int32_t x, uint32_t color)
-{
-    lv_obj_t *label = lv_label_create(parent);
-    lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
-    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(label, align, x, 0);
-    return label;
-}
-
-static void set_side_label(lv_obj_t *label, const char *name, int h5, int d7)
-{
-    char h5_text[12] = "--";
-    char d7_text[12] = "--";
-    if (h5 >= 0) {
-        snprintf(h5_text, sizeof(h5_text), "%d%%", h5);
-    }
-    if (d7 >= 0) {
-        snprintf(d7_text, sizeof(d7_text), "%d%%", d7);
-    }
-    lv_label_set_text_fmt(label, "%s\n%s\n7d %s", name, h5_text, d7_text);
-}
-
-static void dashboard_create(lv_obj_t *scr)
-{
-    lv_obj_set_style_bg_color(scr, lv_color_hex(COLOR_BG), 0);
-    lv_obj_set_style_text_color(scr, lv_color_white(), 0);
-
-    /* Both arcs fill bottom-up; the right one runs counter-clockwise from 45°. */
-    s_claude_arc = usage_arc_create(scr, 135, 225, COLOR_CLAUDE, LV_ARC_MODE_NORMAL);
-    s_codex_arc = usage_arc_create(scr, 315, 45, COLOR_CODEX, LV_ARC_MODE_REVERSE);
-
-    s_claude_label = side_label_create(scr, LV_ALIGN_LEFT_MID, 24, COLOR_CLAUDE);
-    s_codex_label = side_label_create(scr, LV_ALIGN_RIGHT_MID, -24, COLOR_CODEX);
-    set_side_label(s_claude_label, "Claude", -1, -1);
-    set_side_label(s_codex_label, "Codex", -1, -1);
-
-    s_link_label = lv_label_create(scr);
-    lv_obj_align(s_link_label, LV_ALIGN_TOP_MID, 0, 40);
-
-    s_cost_label = lv_label_create(scr);
-    lv_obj_set_style_text_font(s_cost_label, &lv_font_montserrat_28, 0);
-    lv_label_set_text(s_cost_label, "$--");
-    lv_obj_align(s_cost_label, LV_ALIGN_CENTER, 0, -38);
-
-    lv_obj_t *caption = lv_label_create(scr);
-    lv_obj_set_style_text_color(caption, lv_color_hex(COLOR_MUTED), 0);
-    lv_label_set_text(caption, "Claude today");
-    lv_obj_align(caption, LV_ALIGN_CENTER, 0, -10);
-
-    s_status_label = lv_label_create(scr);
-    lv_obj_set_width(s_status_label, 170);
-    lv_obj_set_height(s_status_label, 3 * 18);
-    lv_label_set_long_mode(s_status_label, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_set_style_text_align(s_status_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(s_status_label, lv_color_hex(COLOR_MUTED), 0);
-    lv_label_set_text(s_status_label, "Idle");
-    lv_obj_align(s_status_label, LV_ALIGN_CENTER, 0, 48);
-}
-
-static void set_link_state(bool linked)
-{
-    lv_label_set_text(s_link_label, linked ? LV_SYMBOL_USB " linked" : LV_SYMBOL_USB " no bridge");
-    lv_obj_set_style_text_color(s_link_label, lv_color_hex(linked ? COLOR_OK : COLOR_MUTED), 0);
-}
 
 /* ---------- confirm modal ---------- */
 
@@ -248,7 +153,8 @@ static void modal_show(uint32_t id, const char *tool, const char *summary, ui_ri
 static void link_timer_cb(lv_timer_t *timer)
 {
     bool linked = s_link_probe();
-    set_link_state(linked);
+    s_dash.host_linked = linked;
+    agent_dashboard_update(&s_dash);
     if (!linked && s_modal_visible) {
         modal_hide(); /* the bridge releases the request to the terminal on its side */
     }
@@ -262,9 +168,11 @@ void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe)
     s_link_probe = link_probe;
 
     bsp_display_lock(0);
-    dashboard_create(lv_screen_active());
+    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
+    agent_dashboard_create(lv_screen_active());
+    agent_dashboard_mock_data(&s_dash);
+    agent_dashboard_update(&s_dash);
     modal_create();
-    set_link_state(false);
     lv_timer_create(link_timer_cb, LINK_POLL_MS, NULL);
     bsp_display_unlock();
 }
@@ -272,30 +180,28 @@ void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe)
 void ui_set_usage(const ui_usage_t *usage)
 {
     bsp_display_lock(0);
-    lv_arc_set_value(s_claude_arc, usage->claude_h5 > 0 ? usage->claude_h5 : 0);
-    lv_arc_set_value(s_codex_arc, usage->codex_h5 > 0 ? usage->codex_h5 : 0);
-    set_side_label(s_claude_label, "Claude", usage->claude_h5, usage->claude_d7);
-    set_side_label(s_codex_label, "Codex", usage->codex_h5, usage->codex_d7);
-    if (usage->cost_today >= 0) {
-        lv_label_set_text_fmt(s_cost_label, "$%.2f", (double)usage->cost_today);
-    } else {
-        lv_label_set_text(s_cost_label, "$--");
-    }
+    s_dash.claude_usage_percent = usage->claude_h5;
+    s_dash.claude_weekly_percent = usage->claude_d7;
+    s_dash.codex_usage_percent = usage->codex_h5;
+    s_dash.codex_weekly_percent = usage->codex_d7;
+    s_dash.daily_cost = usage->cost_today;
+    agent_dashboard_update(&s_dash);
     bsp_display_unlock();
 }
 
 void ui_show_event(const char *source, ui_event_kind_t kind, const char *text)
 {
-    static const uint32_t colors[] = {
-        [UI_EVENT_DONE] = COLOR_OK,
-        [UI_EVENT_ATTENTION] = COLOR_WARN,
-        [UI_EVENT_ERROR] = COLOR_DANGER,
+    static const agent_dashboard_tone_t tones[] = {
+        [UI_EVENT_DONE] = AGENT_DASHBOARD_TONE_OK,
+        [UI_EVENT_ATTENTION] = AGENT_DASHBOARD_TONE_WARN,
+        [UI_EVENT_ERROR] = AGENT_DASHBOARD_TONE_ERROR,
     };
     const char *name = strcmp(source, "codex") == 0 ? "Codex" : "Claude";
 
     bsp_display_lock(0);
-    lv_obj_set_style_text_color(s_status_label, lv_color_hex(colors[kind]), 0);
-    lv_label_set_text_fmt(s_status_label, "%s: %s", name, text);
+    snprintf(s_dash.status_text, sizeof(s_dash.status_text), "%s: %s", name, text);
+    s_dash.status_tone = tones[kind];
+    agent_dashboard_update(&s_dash);
     bsp_display_unlock();
 }
 

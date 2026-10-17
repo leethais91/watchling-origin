@@ -1,0 +1,133 @@
+/*
+ * Dashboard simulator.
+ *   dashboard_sim                     SDL window, live (blink animation runs)
+ *   dashboard_sim --shot out.ppm      render one frame headless and write it as PPM
+ *   --stress                          worst-case values (long status, 100%, big cost, low battery)
+ *   --unknown                         every value unknown, as at boot before the bridge reports
+ *   --after-ms N                      with --shot: let animations run N ms before capturing
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+
+#include "lvgl.h"
+#include "agent_dashboard.h"
+
+#define HOR_RES 360
+#define VER_RES 360
+
+static uint16_t s_framebuffer[HOR_RES * VER_RES];
+
+static uint32_t tick_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
+
+static void headless_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
+{
+    LV_UNUSED(area);
+    LV_UNUSED(px_map); /* direct mode renders straight into s_framebuffer */
+    lv_display_flush_ready(disp);
+}
+
+static int write_ppm(const char *path)
+{
+    FILE *f = fopen(path, "wb");
+    if (f == NULL) {
+        perror(path);
+        return 1;
+    }
+    fprintf(f, "P6\n%d %d\n255\n", HOR_RES, VER_RES);
+    for (int i = 0; i < HOR_RES * VER_RES; i++) {
+        uint16_t c = s_framebuffer[i];
+        uint8_t rgb[3] = {
+            (uint8_t)(((c >> 11) & 0x1F) * 255 / 31),
+            (uint8_t)(((c >> 5) & 0x3F) * 255 / 63),
+            (uint8_t)((c & 0x1F) * 255 / 31),
+        };
+        fwrite(rgb, 1, sizeof(rgb), f);
+    }
+    fclose(f);
+    return 0;
+}
+
+int main(int argc, char **argv)
+{
+    const char *shot_path = NULL;
+    bool stress = false;
+    bool unknown = false;
+    uint32_t after_ms = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--shot") == 0 && i + 1 < argc) {
+            shot_path = argv[++i];
+        } else if (strcmp(argv[i], "--stress") == 0) {
+            stress = true;
+        } else if (strcmp(argv[i], "--unknown") == 0) {
+            unknown = true;
+        } else if (strcmp(argv[i], "--after-ms") == 0 && i + 1 < argc) {
+            after_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
+        } else {
+            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown]\n", argv[0]);
+            return 2;
+        }
+    }
+
+    lv_init();
+    if (shot_path != NULL) {
+        lv_tick_set_cb(tick_ms);
+        lv_display_t *disp = lv_display_create(HOR_RES, VER_RES);
+        lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
+        lv_display_set_buffers(disp, s_framebuffer, NULL, sizeof(s_framebuffer), LV_DISPLAY_RENDER_MODE_DIRECT);
+        lv_display_set_flush_cb(disp, headless_flush_cb);
+    } else {
+        lv_sdl_window_create(HOR_RES, VER_RES);
+        lv_sdl_mouse_create();
+    }
+
+    lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
+    agent_dashboard_create(lv_screen_active());
+
+    agent_dashboard_data_t data;
+    agent_dashboard_mock_data(&data);
+    if (stress) {
+        data.claude_usage_percent = 100;
+        data.codex_usage_percent = 0;
+        data.claude_weekly_percent = 100;
+        data.codex_weekly_percent = 7;
+        data.daily_cost = 1234.56f;
+        data.wifi_connected = false;
+        data.host_linked = true;
+        data.battery_percent = 8;
+        snprintf(data.time_text, sizeof(data.time_text), "23:59");
+        snprintf(data.date_text, sizeof(data.date_text), "Wed, Sep 30");
+        snprintf(data.status_text, sizeof(data.status_text), "Claude: Refactored the permission broker and all tests");
+        data.status_tone = AGENT_DASHBOARD_TONE_WARN;
+    } else if (unknown) {
+        data = (agent_dashboard_data_t){
+            .claude_usage_percent = -1,
+            .codex_usage_percent = -1,
+            .claude_weekly_percent = -1,
+            .codex_weekly_percent = -1,
+            .daily_cost = -1,
+            .battery_percent = -1,
+        };
+    }
+    agent_dashboard_update(&data);
+
+    if (shot_path != NULL) {
+        for (uint32_t start = tick_ms(); tick_ms() - start < after_ms;) {
+            lv_timer_handler();
+            usleep(1000);
+        }
+        lv_refr_now(NULL);
+        return write_ppm(shot_path);
+    }
+    while (1) {
+        uint32_t wait_ms = lv_timer_handler();
+        usleep((wait_ms > 0 && wait_ms < 50 ? wait_ms : 5) * 1000);
+    }
+}

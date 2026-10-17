@@ -2,6 +2,14 @@
 
 Status: Phase 1 + Phase 2 done (verified on device 2026-10-17); Phase 3 next
 
+## Phase 3 progress (2026-10-17)
+- Idle dashboard screen done in `main/agent_dashboard.c`, verified in the host simulator
+  (`echoear-firmware/simulator/`); firmware builds. Not yet checked on the panel.
+- Avatar is cut from the design mockup (`main/assets/robot_avatar.png`, RGB565A8); eyes blink via
+  LVGL lids over the baked-in eyes. Fonts: Montserrat Bold/SemiBold subsets (OFL).
+- Clock/date/Wi-Fi/BLE/battery are mock until providers exist (no RTC/SNTP, Wi-Fi, BLE or
+  fuel-gauge driver yet). Working/notification screens, page dots and waveform not built.
+
 ## Phase 2 findings (live test 2026-10-17)
 - While the PermissionRequest hook waits, the Claude Code terminal shows only a spinner (no
   parallel dialog). An unanswered request blocks the session until ECHOEAR_CONFIRM_TIMEOUT_S

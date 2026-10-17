@@ -13,3 +13,6 @@ pc-bridge/dist/
 .vscode/
 .env
 .env.*
+
+# Dashboard simulator
+echoear-firmware/simulator/cmake-out/

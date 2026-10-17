@@ -24,6 +24,22 @@ agent event, and a touch Approve/Deny modal for Claude Code permission requests.
 
 If the board doesn't show up as a USB port, hold **BOOT** while plugging in USB-C.
 
+### Dashboard simulator
+
+The idle dashboard (`main/agent_dashboard.c`) is plain LVGL, so it also builds on the host
+against the same LVGL 9.6 the firmware uses (run `idf.py reconfigure` once so
+`managed_components/` exists). Needs `brew install cmake pkg-config sdl2 imagemagick`.
+
+```sh
+cd echoear-firmware/simulator
+./render-screenshot.sh /tmp/dash.png              # 360x360 PNG with the round mask
+./render-screenshot.sh /tmp/dash.png --stress     # worst-case values; also --unknown, --after-ms N
+./cmake-out/dashboard_sim                         # live SDL window (blink animation)
+```
+
+On the device, usage, cost, status and the USB link icon come from the bridge; clock, date,
+Wi-Fi, BLE and battery show mock values until those providers exist.
+
 ## PC bridge
 
 ```sh
