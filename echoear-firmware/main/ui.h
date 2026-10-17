@@ -1,0 +1,43 @@
+/*
+ * Round 360x360 UI: usage dashboard plus the permission confirm modal.
+ * Public functions take the LVGL lock themselves; call them from any task.
+ */
+#pragma once
+
+#include <stdbool.h>
+#include <stdint.h>
+
+/* Percentages 0..100, or -1 when unknown. cost_today < 0 when unknown. */
+typedef struct {
+    int claude_h5;
+    int claude_d7;
+    int codex_h5;
+    int codex_d7;
+    float cost_today;
+} ui_usage_t;
+
+typedef enum {
+    UI_RISK_LOW,
+    UI_RISK_MEDIUM,
+    UI_RISK_HIGH,
+} ui_risk_t;
+
+typedef enum {
+    UI_EVENT_DONE,
+    UI_EVENT_ATTENTION,
+    UI_EVENT_ERROR,
+} ui_event_kind_t;
+
+/* Called from the LVGL task when the user taps Approve or Deny. */
+typedef void (*ui_decision_cb_t)(uint32_t id, bool approve);
+/* Polled once per second; returning false hides any open modal. */
+typedef bool (*ui_link_probe_t)(void);
+
+/* Builds the dashboard. Requires bsp_display_start() to have run. */
+void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe);
+
+void ui_set_usage(const ui_usage_t *usage);
+void ui_show_event(const char *source, ui_event_kind_t kind, const char *text);
+void ui_show_confirm(uint32_t id, const char *tool, const char *summary, ui_risk_t risk, const char *project);
+/* Hides the modal if it still shows request `id`. */
+void ui_cancel_confirm(uint32_t id);

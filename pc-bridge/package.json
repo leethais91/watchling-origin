@@ -10,7 +10,12 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "list-ports": "tsx src/list-ports.ts"
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "start": "node dist/bridge.js",
+    "dev": "tsx src/bridge.ts",
+    "list-ports": "tsx src/list-ports.ts",
+    "hooks:install": "node dist/install-hooks.js install",
+    "hooks:uninstall": "node dist/install-hooks.js uninstall"
   },
   "dependencies": {
     "serialport": "^13.0.0"

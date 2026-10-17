@@ -19,8 +19,8 @@ idf.py build
 idf.py -p /dev/cu.usbmodem* flash monitor
 ```
 
-Current firmware is a hardware bring-up: two usage arcs on the edge, a dot that
-follows taps, PSRAM size on screen, and a beep at boot and on every tap.
+The firmware shows Claude Code / Codex usage arcs, today's Claude cost, the latest
+agent event, and a touch Approve/Deny modal for Claude Code permission requests.
 
 If the board doesn't show up as a USB port, hold **BOOT** while plugging in USB-C.
 
@@ -29,6 +29,20 @@ If the board doesn't show up as a USB port, hold **BOOT** while plugging in USB-
 ```sh
 cd pc-bridge
 nvm use                         # Node 22
-npm install
+npm install && npm run build
 npm run list-ports              # Espressif device is marked with *
+npm start                       # bridge daemon; keep it running
+npm run hooks:install           # adds hooks + statusline wrapper to ~/.claude/settings.json (backed up)
+npm run hooks:uninstall         # removes them and restores the original statusline
+npm test
 ```
+
+How it behaves:
+
+- Permission requests appear on the device only while the bridge runs and the device answers
+  pings. Otherwise Claude Code shows its normal terminal prompt immediately.
+- While a request is on the device, the Claude Code terminal waits (spinner). Unanswered
+  requests fall back to the terminal after `ECHOEAR_CONFIRM_TIMEOUT_S` (default 120).
+- Codex usage and "done" events come from `~/.codex/sessions`; no Codex config changes.
+
+Wire format and message types: [docs/device-protocol.md](docs/device-protocol.md).

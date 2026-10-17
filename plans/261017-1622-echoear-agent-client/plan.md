@@ -1,6 +1,13 @@
 # EchoEar (ESP-VoCat) Agent Client — Plan
 
-Status: Phase 1 done (verified on device 2026-10-17); Phase 2 in progress
+Status: Phase 1 + Phase 2 done (verified on device 2026-10-17); Phase 3 next
+
+## Phase 2 findings (live test 2026-10-17)
+- While the PermissionRequest hook waits, the Claude Code terminal shows only a spinner (no
+  parallel dialog). An unanswered request blocks the session until ECHOEAR_CONFIRM_TIMEOUT_S
+  (default 120 s), then falls back to the terminal prompt. Revisit the default if this hurts.
+- Live session: Bash request approved by touch end-to-end. Deny path covered by unit tests only.
+- Daily cost counts only sessions whose statusline reached the bridge while it was running.
 Created: 2026-10-17
 
 ## Locked decisions

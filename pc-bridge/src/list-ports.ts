@@ -3,9 +3,7 @@
  * port can be identified after flashing.
  */
 import { SerialPort } from "serialport";
-
-/** USB vendor ID assigned to Espressif (ESP32-S3 USB-Serial-JTAG enumerates with it). */
-const ESPRESSIF_VENDOR_ID = "303a";
+import { ESPRESSIF_VENDOR_ID } from "./transport/serial-transport.js";
 
 const ports = await SerialPort.list();
 
