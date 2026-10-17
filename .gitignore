@@ -1,0 +1,15 @@
+# ESP-IDF
+echoear-firmware/build/
+echoear-firmware/managed_components/
+echoear-firmware/sdkconfig
+echoear-firmware/sdkconfig.old
+
+# Node
+node_modules/
+pc-bridge/dist/
+
+# OS / editor
+.DS_Store
+.vscode/
+.env
+.env.*

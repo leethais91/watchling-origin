@@ -1,0 +1,7 @@
+dependencies:
+  idf: ">=5.5"
+  # Official ESP-VoCat (formerly EchoEar) V1.2 BSP: ST77916 LCD, CST816S touch,
+  # ES8311/ES7210 via esp_codec_dev, LVGL via esp_lvgl_port.
+  espressif/esp_vocat: "^1.1.0"
+  # 9.6 introduced the lv_obj_set_<flag>() setters used by the UI code
+  lvgl/lvgl: "^9.6"
