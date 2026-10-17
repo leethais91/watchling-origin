@@ -21,7 +21,7 @@ target_compile_definitions(lvgl PUBLIC LV_CONF_INCLUDE_SIMPLE)
 target_link_libraries(lvgl PUBLIC PkgConfig::SDL2 m)
 
 file(GLOB DASHBOARD_ASSETS CONFIGURE_DEPENDS ${FW_MAIN}/assets/*.c)
-add_executable(dashboard_sim sim_main.c ${FW_MAIN}/agent_dashboard.c ${DASHBOARD_ASSETS})
-target_include_directories(dashboard_sim PRIVATE ${FW_MAIN})
-target_compile_options(dashboard_sim PRIVATE -Wall -Wextra)
+add_executable(dashboard_sim sim_main.c ${FW_MAIN}/agent_dashboard.c ${FW_MAIN}/ui.c ${DASHBOARD_ASSETS})
+target_include_directories(dashboard_sim PRIVATE ${FW_MAIN} ${CMAKE_CURRENT_SOURCE_DIR}/stubs)
+target_compile_options(dashboard_sim PRIVATE -Wall -Wextra -Wno-unused-parameter) # same as ESP-IDF
 target_link_libraries(dashboard_sim PRIVATE lvgl)

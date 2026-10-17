@@ -4,6 +4,7 @@
  *   dashboard_sim --shot out.ppm      render one frame headless and write it as PPM
  *   --stress                          worst-case values (long status, 100%, big cost, low battery)
  *   --unknown                         every value unknown, as at boot before the bridge reports
+ *   --confirm                         firmware UI (ui.c) with the permission modal open
  *   --after-ms N                      with --shot: let animations run N ms before capturing
  */
 #include <stdio.h>
@@ -14,6 +15,7 @@
 
 #include "lvgl.h"
 #include "agent_dashboard.h"
+#include "ui.h"
 
 #define HOR_RES 360
 #define VER_RES 360
@@ -32,6 +34,16 @@ static void headless_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t
     LV_UNUSED(area);
     LV_UNUSED(px_map); /* direct mode renders straight into s_framebuffer */
     lv_display_flush_ready(disp);
+}
+
+static void sim_decision(uint32_t id, bool approve)
+{
+    printf("decision #%u: %s\n", (unsigned)id, approve ? "approve" : "deny");
+}
+
+static bool sim_link_probe(void)
+{
+    return true;
 }
 
 static int write_ppm(const char *path)
@@ -55,11 +67,30 @@ static int write_ppm(const char *path)
     return 0;
 }
 
+static int render_shot(const char *path, uint32_t after_ms)
+{
+    for (uint32_t start = tick_ms(); tick_ms() - start < after_ms;) {
+        lv_timer_handler();
+        usleep(1000);
+    }
+    lv_refr_now(NULL);
+    return write_ppm(path);
+}
+
+static int run_window(void)
+{
+    while (1) {
+        uint32_t wait_ms = lv_timer_handler();
+        usleep((wait_ms > 0 && wait_ms < 50 ? wait_ms : 5) * 1000);
+    }
+}
+
 int main(int argc, char **argv)
 {
     const char *shot_path = NULL;
     bool stress = false;
     bool unknown = false;
+    bool confirm = false;
     uint32_t after_ms = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--shot") == 0 && i + 1 < argc) {
@@ -68,10 +99,12 @@ int main(int argc, char **argv)
             stress = true;
         } else if (strcmp(argv[i], "--unknown") == 0) {
             unknown = true;
+        } else if (strcmp(argv[i], "--confirm") == 0) {
+            confirm = true;
         } else if (strcmp(argv[i], "--after-ms") == 0 && i + 1 < argc) {
             after_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
         } else {
-            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown | --confirm]\n", argv[0]);
             return 2;
         }
     }
@@ -86,6 +119,12 @@ int main(int argc, char **argv)
     } else {
         lv_sdl_window_create(HOR_RES, VER_RES);
         lv_sdl_mouse_create();
+    }
+
+    if (confirm) {
+        ui_init(sim_decision, sim_link_probe);
+        ui_show_confirm(7, "Bash", "git push origin main --force-with-lease", UI_RISK_HIGH, "voicat-monitor-agent");
+        return shot_path != NULL ? render_shot(shot_path, after_ms) : run_window();
     }
 
     lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
@@ -118,16 +157,5 @@ int main(int argc, char **argv)
     }
     agent_dashboard_update(&data);
 
-    if (shot_path != NULL) {
-        for (uint32_t start = tick_ms(); tick_ms() - start < after_ms;) {
-            lv_timer_handler();
-            usleep(1000);
-        }
-        lv_refr_now(NULL);
-        return write_ppm(shot_path);
-    }
-    while (1) {
-        uint32_t wait_ms = lv_timer_handler();
-        usleep((wait_ms > 0 && wait_ms < 50 ? wait_ms : 5) * 1000);
-    }
+    return shot_path != NULL ? render_shot(shot_path, after_ms) : run_window();
 }

@@ -20,10 +20,17 @@
 #define COLOR_DANGER      0xEF4444
 
 #define MODAL_RING_PX     8
-#define BUTTON_W          112
+/*
+ * The decision buttons run past the round edge on purpose: the glass slices off their
+ * outer sides. Labels shift inward so the text stays centred in the visible part.
+ */
+#define BUTTON_W          162
 #define BUTTON_H          60
-#define BUTTON_OFFSET_X   62
+#define BUTTON_RADIUS     (BUTTON_H * 30 / 100)
+#define BUTTON_GAP        10
+#define BUTTON_OFFSET_X   ((BUTTON_W + BUTTON_GAP) / 2)
 #define BUTTON_OFFSET_Y   92
+#define BUTTON_LABEL_INSET 10
 #define RING_PULSE_MS     500
 #define STATUS_POLL_MS    1000
 
@@ -73,7 +80,8 @@ static lv_obj_t *decision_button_create(lv_obj_t *parent, const char *text, uint
 {
     lv_obj_t *btn = lv_button_create(parent);
     lv_obj_set_size(btn, BUTTON_W, BUTTON_H);
-    lv_obj_set_style_radius(btn, BUTTON_H / 2, 0);
+    lv_obj_set_style_radius(btn, BUTTON_RADIUS, 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
     lv_obj_set_style_bg_color(btn, lv_color_hex(color), 0);
     lv_obj_align(btn, LV_ALIGN_CENTER, x, BUTTON_OFFSET_Y);
     lv_obj_add_event_cb(btn, decision_button_cb, LV_EVENT_CLICKED, (void *)(intptr_t)approve);
@@ -81,7 +89,7 @@ static lv_obj_t *decision_button_create(lv_obj_t *parent, const char *text, uint
     lv_obj_t *label = lv_label_create(btn);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
     lv_label_set_text(label, text);
-    lv_obj_center(label);
+    lv_obj_align(label, LV_ALIGN_CENTER, x < 0 ? BUTTON_LABEL_INSET : -BUTTON_LABEL_INSET, 0);
     return btn;
 }
 
@@ -119,6 +127,7 @@ static void modal_create(void)
     lv_obj_set_width(s_modal_summary, lv_pct(100));
     lv_label_set_long_mode(s_modal_summary, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_style_text_font(s_modal_summary, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(s_modal_summary, lv_color_white(), 0); /* the theme darkens text in the box */
     lv_obj_set_style_text_align(s_modal_summary, LV_TEXT_ALIGN_CENTER, 0);
 
     decision_button_create(s_modal, "DENY", COLOR_DANGER, -BUTTON_OFFSET_X, false);
