@@ -20,6 +20,18 @@ test("permission phrases name the action, not the raw payload", () => {
   );
 });
 
+test("permission phrases name Codex and its patches", () => {
+  assert.equal(permissionSpeech({ src: "codex", tool: "Bash", summary: "npm test" }), "Codex wants to run npm test");
+  assert.equal(
+    permissionSpeech({ src: "codex", tool: "apply_patch", summary: "add src/notes.txt" }),
+    "Codex wants to edit notes.txt",
+  );
+  assert.equal(
+    permissionSpeech({ src: "codex", tool: "apply_patch", summary: "update a.ts\ndelete b.ts" }),
+    "Codex wants to edit 2 files",
+  );
+});
+
 test("done phrases keep the first plain sentence", () => {
   assert.equal(
     doneSpeech("claude", "**Fixed** the `broker` timeout. Also updated tests."),

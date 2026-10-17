@@ -30,6 +30,7 @@ export interface SpeechBeginMessage {
 export interface ConfirmRequestMessage {
   t: "confirm_req";
   id: number;
+  src: AgentSource;
   tool: string;
   summary: string;
   risk: Risk;

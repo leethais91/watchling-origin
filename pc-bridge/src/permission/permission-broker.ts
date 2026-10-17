@@ -41,6 +41,7 @@ export class PermissionBroker {
       const message: ConfirmRequestMessage = {
         t: "confirm_req",
         id,
+        src: input.src ?? "claude",
         tool: input.tool_name,
         summary: summarizePermission(input),
         risk: classifyRisk(input),

@@ -1,8 +1,9 @@
 /**
- * Adds (or removes) the EchoEar hooks and statusline wrapper in ~/.claude/settings.json.
+ * Adds (or removes) the EchoEar hooks and statusline wrapper in ~/.claude/settings.json,
+ * or with --codex the permission hook in ~/.codex/hooks.json (same hooks format).
  *
- *   node dist/install-hooks.js install     back up settings, add hooks, wrap statusLine
- *   node dist/install-hooks.js uninstall   remove hooks, restore the original statusLine
+ *   node dist/install-hooks.js install [--codex]     back up the file, add hooks (Claude: wrap statusLine)
+ *   node dist/install-hooks.js uninstall [--codex]   remove hooks (Claude: restore the original statusLine)
  *
  * Idempotent: entries are recognised by the absolute path of this package's dist/ files,
  * and existing hooks from other tools are left untouched.
@@ -14,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { CONFIG_PATH, ECHOEAR_DIR, type EchoearConfig } from "./ipc/paths.js";
 
 const SETTINGS_PATH = join(homedir(), ".claude", "settings.json");
+const CODEX_HOOKS_PATH = join(homedir(), ".codex", "hooks.json");
 const DIST_DIR = dirname(fileURLToPath(import.meta.url));
 const HOOK_SCRIPT = join(DIST_DIR, "hook.js");
 const STATUSLINE_SCRIPT = join(DIST_DIR, "statusline.js");
@@ -52,6 +54,11 @@ const ECHOEAR_HOOKS: Record<string, HookMatcher> = {
   Notification: { matcher: "idle_prompt", hooks: [hookCommand("notification", EVENT_HOOK_TIMEOUT_S)] },
 };
 
+/** Codex already reports busy/done through its session files; it only needs approvals. */
+const CODEX_HOOKS: Record<string, HookMatcher> = {
+  PermissionRequest: { hooks: [hookCommand("permission codex", PERMISSION_HOOK_TIMEOUT_S)] },
+};
+
 const isOurs = (hook: HookCommand) => hook.command.includes(HOOK_SCRIPT);
 
 function removeOurHooks(settings: Settings): void {
@@ -70,12 +77,16 @@ async function readConfig(): Promise<EchoearConfig> {
     .catch(() => ({}));
 }
 
-async function install(settings: Settings): Promise<void> {
+function addOurHooks(settings: Settings, hooks: Record<string, HookMatcher>): void {
   removeOurHooks(settings);
   settings.hooks ??= {};
-  for (const [event, matcher] of Object.entries(ECHOEAR_HOOKS)) {
+  for (const [event, matcher] of Object.entries(hooks)) {
     (settings.hooks[event] ??= []).push(matcher);
   }
+}
+
+async function install(settings: Settings): Promise<void> {
+  addOurHooks(settings, ECHOEAR_HOOKS);
 
   if (settings.statusLine?.command !== STATUSLINE_COMMAND) {
     const config: EchoearConfig = { ...(await readConfig()), statuslineCommand: settings.statusLine?.command };
@@ -94,18 +105,31 @@ async function uninstall(settings: Settings): Promise<void> {
   }
 }
 
-const action = process.argv[2];
-if (action !== "install" && action !== "uninstall") {
-  console.error("usage: install-hooks.js <install|uninstall>");
+const [action, flag] = process.argv.slice(2);
+if ((action !== "install" && action !== "uninstall") || (flag !== undefined && flag !== "--codex")) {
+  console.error("usage: install-hooks.js <install|uninstall> [--codex]");
   process.exit(1);
 }
+const codex = flag === "--codex";
+const path = codex ? CODEX_HOOKS_PATH : SETTINGS_PATH;
 
-const settings = JSON.parse(await readFile(SETTINGS_PATH, "utf8")) as Settings;
-const backupPath = `${SETTINGS_PATH}.echoear-backup-${Date.now()}`;
-await copyFile(SETTINGS_PATH, backupPath);
+// Codex has no hooks.json until something adds one; Claude Code always has settings.json.
+const existing = await readFile(path, "utf8").catch((err: NodeJS.ErrnoException) => {
+  if (codex && err.code === "ENOENT") return null;
+  throw err;
+});
+const settings = (existing ? JSON.parse(existing) : {}) as Settings;
+const backupPath = existing ? `${path}.echoear-backup-${Date.now()}` : null;
+if (backupPath) await copyFile(path, backupPath);
 
-await (action === "install" ? install(settings) : uninstall(settings));
-await writeFile(SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n");
+if (codex) {
+  if (action === "install") addOurHooks(settings, CODEX_HOOKS);
+  else removeOurHooks(settings);
+} else {
+  await (action === "install" ? install(settings) : uninstall(settings));
+}
+await mkdir(dirname(path), { recursive: true });
+await writeFile(path, JSON.stringify(settings, null, 2) + "\n");
 
-console.log(`${action === "install" ? "Installed" : "Removed"} EchoEar hooks in ${SETTINGS_PATH}`);
-console.log(`Backup: ${backupPath}`);
+console.log(`${action === "install" ? "Installed" : "Removed"} EchoEar hooks in ${path}`);
+if (backupPath) console.log(`Backup: ${backupPath}`);

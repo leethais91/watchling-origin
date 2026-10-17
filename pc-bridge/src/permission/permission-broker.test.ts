@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { HostMessage } from "../protocol/messages.js";
 import { PermissionBroker } from "./permission-broker.js";
-import { classifyRisk } from "./permission-summary.js";
+import { classifyRisk, summarizePermission } from "./permission-summary.js";
 
 function setup(timeoutMs = 60_000) {
   const sent: HostMessage[] = [];
@@ -66,4 +66,23 @@ test("destructive shell commands are high risk", () => {
   }
   assert.equal(classifyRisk(bash("npm test")), "medium");
   assert.equal(classifyRisk({ tool_name: "Edit", tool_input: {} }), "medium");
+});
+
+test("Codex patches list their files and deletions are high risk", () => {
+  const patch = (body: string) => ({
+    src: "codex" as const,
+    tool_name: "apply_patch",
+    cwd: "/work/app",
+    tool_input: { command: `*** Begin Patch\n${body}\n*** End Patch` },
+  });
+  const edit = patch("*** Update File: /work/app/src/a.ts\n@@\n-x\n+y\n*** Add File: notes.txt\n+hi");
+  assert.equal(summarizePermission(edit), "update src/a.ts\nadd notes.txt");
+  assert.equal(classifyRisk(edit), "medium");
+  assert.equal(classifyRisk(patch("*** Delete File: old.ts")), "high");
+});
+
+test("confirm requests carry the agent that asked", () => {
+  const { broker, sent } = setup();
+  void broker.request({ ...bash("ls"), src: "codex" }, new AbortController().signal);
+  assert.equal(sent[0].t === "confirm_req" && sent[0].src, "codex");
 });

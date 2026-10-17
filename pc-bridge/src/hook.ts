@@ -1,9 +1,11 @@
 /**
- * Claude Code hook entry: `node dist/hook.js <permission|prompt|stop|stop-failure|notification>`
- * with the hook JSON on stdin. Every path exits 0; printing nothing leaves Claude Code
- * on its normal flow, so a stopped bridge or unplugged device never blocks work.
+ * Hook entry: `node dist/hook.js <permission|prompt|stop|stop-failure|notification> [codex]`
+ * with the hook JSON on stdin. Claude Code and Codex send the same payload shape; the
+ * optional second argument says which agent runs the hook. Every path exits 0; printing
+ * nothing leaves the agent on its normal flow, so a stopped bridge or unplugged device
+ * never blocks work.
  */
-import type { AgentActivityMessage, AgentEventMessage } from "./protocol/messages.js";
+import type { AgentActivityMessage, AgentEventMessage, AgentSource } from "./protocol/messages.js";
 import type { PermissionResponse } from "./ipc/ipc-server.js";
 import { postToBridge, readStdin } from "./ipc/ipc-client.js";
 
@@ -22,6 +24,7 @@ interface HookInput {
 }
 
 const command = process.argv[2];
+const src: AgentSource = process.argv[3] === "codex" ? "codex" : "claude";
 const input = JSON.parse(await readStdin()) as HookInput;
 
 switch (command) {
@@ -30,7 +33,7 @@ switch (command) {
     break;
   case "prompt": {
     // A new turn starts; the turn-ending Stop/StopFailure events clear it on the device.
-    const activity: Omit<AgentActivityMessage, "t"> = { src: "claude", busy: true };
+    const activity: Omit<AgentActivityMessage, "t"> = { src, busy: true };
     await postToBridge("/activity", activity, EVENT_TIMEOUT_MS);
     break;
   }
@@ -48,7 +51,7 @@ switch (command) {
 
 async function handlePermission(hookInput: HookInput): Promise<void> {
   if (!hookInput.tool_name || TERMINAL_ONLY_TOOLS.has(hookInput.tool_name)) return;
-  const response = await postToBridge<PermissionResponse>("/permission", hookInput);
+  const response = await postToBridge<PermissionResponse>("/permission", { ...hookInput, src });
   if (!response?.decision) return;
 
   const decision =
@@ -62,7 +65,7 @@ async function handlePermission(hookInput: HookInput): Promise<void> {
 
 async function sendEvent(kind: AgentEventMessage["kind"], text: string): Promise<void> {
   const event: Omit<AgentEventMessage, "t"> = {
-    src: "claude",
+    src,
     kind,
     text: text.replace(/\s+/g, " ").trim().slice(0, MAX_EVENT_TEXT_CHARS),
   };

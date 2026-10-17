@@ -165,7 +165,7 @@ int main(int argc, char **argv)
 
     if (confirm) {
         ui_init(sim_decision, sim_link_probe);
-        ui_show_confirm(7, "Bash",
+        ui_show_confirm(7, "claude", "Bash",
                         "cd echoear-firmware && idf.py -p /dev/cu.usbmodem1301 flash monitor 2>&1 | tee flash.log && "
                         "git push origin main --force-with-lease",
                         UI_RISK_HIGH);

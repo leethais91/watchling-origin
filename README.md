@@ -73,6 +73,8 @@ npm run list-ports              # Espressif device is marked with *
 npm start                       # bridge daemon; keep it running
 npm run hooks:install           # adds hooks + statusline wrapper to ~/.claude/settings.json (backed up)
 npm run hooks:uninstall         # removes them and restores the original statusline
+npm run hooks:install:codex     # adds the permission hook to ~/.codex/hooks.json (backed up)
+npm run hooks:uninstall:codex   # removes it
 npm test
 ```
 
@@ -82,7 +84,9 @@ How it behaves:
   pings. Otherwise Claude Code shows its normal terminal prompt immediately.
 - While a request is on the device, the Claude Code terminal waits (spinner). Unanswered
   requests fall back to the terminal after `ECHOEAR_CONFIRM_TIMEOUT_S` (default 120).
-- Codex usage and "done" events come from `~/.codex/sessions`; no Codex config changes.
+- Codex usage, working and "done" events come from `~/.codex/sessions` with no Codex config.
+  Approve/Deny for Codex needs `npm run hooks:install:codex` (Codex hooks, 0.162+); Codex asks you
+  to trust the new hook once. The modal is titled with the agent that asks.
 - Sound: the device chimes on permission requests, finished tasks, idle waits and errors, and reads
   permission requests and finished tasks aloud. Speech is made on the Mac with `say`:
   `ECHOEAR_TTS=off` mutes it (chimes stay). By default it uses the macOS system voice (System

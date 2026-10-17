@@ -7,14 +7,20 @@ const FILE_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
 const agentName = (src: AgentSource) => (src === "codex" ? "Codex" : "Claude");
 
-export function permissionSpeech(req: Pick<ConfirmRequestMessage, "tool" | "summary">): string {
+export function permissionSpeech(req: Pick<ConfirmRequestMessage, "tool" | "summary"> & { src?: AgentSource }): string {
   const { tool, summary } = req;
-  if (tool === "Bash") return `Claude wants to run ${shortCommand(summary)}`;
-  if (FILE_TOOLS.has(tool)) return `Claude wants to edit ${summary.split("/").pop() || "a file"}`;
-  if (tool === "WebFetch") return `Claude wants to fetch ${hostOf(summary)}`;
+  const name = agentName(req.src ?? "claude");
+  if (tool === "Bash") return `${name} wants to run ${shortCommand(summary)}`;
+  if (FILE_TOOLS.has(tool)) return `${name} wants to edit ${summary.split("/").pop() || "a file"}`;
+  if (tool === "apply_patch") {
+    // Codex patch summary: one "<action> <path>" line per file.
+    const files = summary.split("\n");
+    return `${name} wants to edit ${files.length > 1 ? `${files.length} files` : summary.split("/").pop()}`;
+  }
+  if (tool === "WebFetch") return `${name} wants to fetch ${hostOf(summary)}`;
   const mcp = /^mcp__(.+?)__(.+)$/.exec(tool);
-  if (mcp) return `Claude wants to use ${words(mcp[2])} from ${words(mcp[1])}`;
-  return `Claude wants to use ${words(tool)}`;
+  if (mcp) return `${name} wants to use ${words(mcp[2])} from ${words(mcp[1])}`;
+  return `${name} wants to use ${words(tool)}`;
 }
 
 /** "Claude finished." plus the first sentence of the agent's final message. */

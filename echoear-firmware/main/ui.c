@@ -150,13 +150,13 @@ static void modal_create(void)
     lv_obj_set_hidden(s_modal, true);
 }
 
-static void modal_show(uint32_t id, const char *tool, const char *summary, ui_risk_t risk)
+static void modal_show(uint32_t id, const char *agent_name, const char *tool, const char *summary, ui_risk_t risk)
 {
     uint32_t ring = risk == UI_RISK_HIGH ? COLOR_DANGER : COLOR_WARN;
     s_modal_id = id;
     lv_obj_set_style_border_color(s_modal, lv_color_hex(ring), 0);
     lv_obj_set_style_text_color(s_modal_tool, lv_color_hex(ring), 0);
-    lv_label_set_text(s_modal_title, "Claude");
+    lv_label_set_text(s_modal_title, agent_name);
     lv_label_set_text(s_modal_tool, tool);
     lv_label_set_text(s_modal_summary, summary);
     lv_obj_scroll_to_y(lv_obj_get_parent(s_modal_summary), 0, LV_ANIM_OFF);
@@ -340,10 +340,10 @@ void ui_set_activity(const char *source, bool busy)
     bsp_display_unlock();
 }
 
-void ui_show_confirm(uint32_t id, const char *tool, const char *summary, ui_risk_t risk)
+void ui_show_confirm(uint32_t id, const char *source, const char *tool, const char *summary, ui_risk_t risk)
 {
     bsp_display_lock(0);
-    modal_show(id, tool, summary, risk);
+    modal_show(id, agent_index(source) == AGENT_CODEX ? "Codex" : "Claude", tool, summary, risk);
     bsp_display_unlock();
 }
 
