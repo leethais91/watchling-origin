@@ -16,15 +16,48 @@
 #include "bsp/esp-bsp.h"
 
 #include "audio.h"
+#include "battery.h"
 #include "host_link.h"
 #include "ui.h"
 
 static const char *TAG = "app";
 
+#define BATTERY_POLL_US  (30 * 1000 * 1000)
+
 /* The bridge pings every 2 s; consider it gone after a few missed pings. */
 #define HOST_TIMEOUT_US  (5 * 1000 * 1000)
 
 static volatile int64_t s_last_host_us;
+
+/* esp_timer task; one short I2C transaction pair every 30 s. */
+static void battery_poll(void *arg)
+{
+    battery_state_t state;
+    if (battery_read(&state) == ESP_OK) {
+        ui_set_battery(state.percent, state.charging);
+    } else {
+        ui_set_battery(-1, false);
+    }
+}
+
+static void battery_start(void)
+{
+    esp_err_t err = battery_init();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Fuel gauge not found (%s); hiding battery", esp_err_to_name(err));
+        return;
+    }
+    battery_state_t state;
+    if (battery_read(&state) == ESP_OK) {
+        ESP_LOGI(TAG, "Fuel gauge: %d%%%s", state.percent, state.charging ? ", charging" : "");
+    }
+    battery_poll(NULL);
+    const esp_timer_create_args_t args = {.callback = battery_poll, .name = "battery"};
+    esp_timer_handle_t timer;
+    if (esp_timer_create(&args, &timer) == ESP_OK) {
+        esp_timer_start_periodic(timer, BATTERY_POLL_US);
+    }
+}
 
 static bool host_is_linked(void)
 {
@@ -173,6 +206,7 @@ void app_main(void)
     }
     bsp_display_backlight_on();
     ui_init(on_decision, host_is_linked);
+    battery_start();
 
     if (audio_init() != ESP_OK) {
         ESP_LOGE(TAG, "Speaker unavailable; continuing without sound");

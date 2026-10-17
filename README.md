@@ -50,8 +50,8 @@ cd echoear-firmware/simulator
 ```
 
 On the device, usage, cost, status, clock/date and the USB link icon come from the bridge
-(the clock shows `--:--` until the first sync); Wi-Fi, BLE and battery show mock values until
-those providers exist.
+(the clock shows `--:--` until the first sync). Battery comes from the BQ27220 fuel gauge
+(hidden if it does not answer); Wi-Fi/BLE icons stay hidden until those radios exist.
 
 ## PC bridge
 

@@ -227,14 +227,16 @@ static void status_icons_create(lv_obj_t *parent)
     lv_obj_align(row, LV_ALIGN_CENTER, 0, ICONS_Y);
 
     s_wifi = icon_create(row, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_color(s_wifi, lv_color_hex(COLOR_ELECTRIC_BLUE), 0);
     s_ble = icon_create(row, LV_SYMBOL_BLUETOOTH);
+    lv_obj_set_style_text_color(s_ble, lv_color_hex(COLOR_ELECTRIC_BLUE), 0);
     s_usb = icon_create(row, LV_SYMBOL_USB);
     s_battery_icon = icon_create(row, "");
     s_battery_text = icon_create(row, "");
     lv_obj_set_style_text_color(s_battery_text, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
 }
 
-static void battery_update(int percent)
+static void battery_update(int percent, bool charging)
 {
     lv_obj_set_hidden(s_battery_icon, percent < 0);
     lv_obj_set_hidden(s_battery_text, percent < 0);
@@ -248,8 +250,10 @@ static void battery_update(int percent)
                                         : LV_SYMBOL_BATTERY_EMPTY;
     char text[16];
     snprintf(text, sizeof(text), "%d%%", percent);
-    label_set_text_if_changed(s_battery_icon, symbol);
-    text_color_set_if_changed(s_battery_icon, percent > 20 ? COLOR_OK : COLOR_DANGER);
+    char icon[16];
+    snprintf(icon, sizeof(icon), "%s%s", charging ? LV_SYMBOL_CHARGE " " : "", symbol);
+    label_set_text_if_changed(s_battery_icon, icon);
+    text_color_set_if_changed(s_battery_icon, charging || percent > 20 ? COLOR_OK : COLOR_DANGER);
     label_set_text_if_changed(s_battery_text, text);
 }
 
@@ -378,10 +382,10 @@ void agent_dashboard_update(const agent_dashboard_data_t *data)
     label_set_text_if_changed(s_time, data->time_text[0] ? data->time_text : "--:--");
     label_set_text_if_changed(s_date, data->date_text);
 
-    text_color_set_if_changed(s_wifi, data->wifi_connected ? COLOR_ELECTRIC_BLUE : COLOR_TEXT_MUTED);
-    text_color_set_if_changed(s_ble, data->ble_connected ? COLOR_ELECTRIC_BLUE : COLOR_TEXT_MUTED);
+    lv_obj_set_hidden(s_wifi, !data->wifi_connected);
+    lv_obj_set_hidden(s_ble, !data->ble_connected);
     text_color_set_if_changed(s_usb, data->host_linked ? COLOR_ELECTRIC_BLUE : COLOR_TEXT_MUTED);
-    battery_update(data->battery_percent);
+    battery_update(data->battery_percent, data->battery_charging);
 
     char cost[16] = "$--";
     if (data->daily_cost >= 0) {
