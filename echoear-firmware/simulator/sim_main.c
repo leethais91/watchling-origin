@@ -1,10 +1,11 @@
 /*
  * Dashboard simulator.
- *   dashboard_sim                     SDL window, live (blink animation runs)
+ *   dashboard_sim                     SDL window, live; the robot cycles through its moods
  *   dashboard_sim --shot out.ppm      render one frame headless and write it as PPM
  *   --stress                          worst-case values (long status, 100%, big cost, low battery)
  *   --unknown                         every value unknown, as at boot before the bridge reports
  *   --confirm                         firmware UI (ui.c) with the permission modal open
+ *   --mood NAME                       robot mood: idle busy sleep happy attention error
  *   --after-ms N                      with --shot: let animations run N ms before capturing
  */
 #include <stdio.h>
@@ -15,12 +16,50 @@
 
 #include "lvgl.h"
 #include "agent_dashboard.h"
+#include "robot_face.h"
 #include "ui.h"
 
 #define HOR_RES 360
 #define VER_RES 360
 
+#define MOOD_CYCLE_MS 4000
+
 static uint16_t s_framebuffer[HOR_RES * VER_RES];
+
+static const char *const MOOD_NAMES[] = {
+    [ROBOT_MOOD_IDLE] = "idle",       [ROBOT_MOOD_BUSY] = "busy",
+    [ROBOT_MOOD_SLEEP] = "sleep",     [ROBOT_MOOD_HAPPY] = "happy",
+    [ROBOT_MOOD_ATTENTION] = "attention", [ROBOT_MOOD_ERROR] = "error",
+};
+#define MOOD_COUNT ((int)(sizeof(MOOD_NAMES) / sizeof(MOOD_NAMES[0])))
+
+static int mood_from_name(const char *name)
+{
+    for (int i = 0; i < MOOD_COUNT; i++) {
+        if (strcmp(name, MOOD_NAMES[i]) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void mood_show(robot_mood_t mood)
+{
+    if (mood <= ROBOT_MOOD_SLEEP) {
+        robot_face_set_base(mood);
+    } else {
+        robot_face_react(mood, ROBOT_LOOK_LEFT, 0);
+    }
+}
+
+static void mood_cycle_cb(lv_timer_t *timer)
+{
+    static int next = 1;
+    printf("mood: %s\n", MOOD_NAMES[next]);
+    robot_face_set_base(ROBOT_MOOD_IDLE);
+    mood_show((robot_mood_t)next);
+    next = (next + 1) % MOOD_COUNT;
+}
 
 static uint32_t tick_ms(void)
 {
@@ -92,6 +131,7 @@ int main(int argc, char **argv)
     bool unknown = false;
     bool confirm = false;
     uint32_t after_ms = 0;
+    int mood = -1;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--shot") == 0 && i + 1 < argc) {
             shot_path = argv[++i];
@@ -101,10 +141,12 @@ int main(int argc, char **argv)
             unknown = true;
         } else if (strcmp(argv[i], "--confirm") == 0) {
             confirm = true;
+        } else if (strcmp(argv[i], "--mood") == 0 && i + 1 < argc && (mood = mood_from_name(argv[++i])) >= 0) {
+            continue;
         } else if (strcmp(argv[i], "--after-ms") == 0 && i + 1 < argc) {
             after_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
         } else {
-            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown | --confirm]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown | --confirm] [--mood NAME]\n", argv[0]);
             return 2;
         }
     }
@@ -159,6 +201,12 @@ int main(int argc, char **argv)
         };
     }
     agent_dashboard_update(&data);
+
+    if (mood >= 0) {
+        mood_show((robot_mood_t)mood);
+    } else if (shot_path == NULL) {
+        lv_timer_create(mood_cycle_cb, MOOD_CYCLE_MS, NULL);
+    }
 
     return shot_path != NULL ? render_shot(shot_path, after_ms) : run_window();
 }

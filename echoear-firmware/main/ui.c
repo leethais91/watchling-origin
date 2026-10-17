@@ -7,6 +7,7 @@
 #include "lvgl.h"
 
 #include "agent_dashboard.h"
+#include "robot_face.h"
 
 /*
  * The idle dashboard lives in agent_dashboard.c; this file owns the confirm modal and
@@ -36,6 +37,13 @@
 #define SUMMARY_Y         92
 #define RING_PULSE_MS     500
 #define STATUS_POLL_MS    1000
+/* Claude Code fires no hook when a turn is interrupted, so a busy flag also runs out. */
+#define BUSY_TIMEOUT_MS   (15 * 60 * 1000)
+#define HAPPY_MS          4000
+#define ERROR_MS          6000
+#define ATTENTION_MS      (2 * 60 * 1000)
+
+enum { AGENT_CLAUDE, AGENT_CODEX, AGENT_COUNT };
 
 static ui_decision_cb_t s_on_decision;
 static ui_link_probe_t s_link_probe;
@@ -44,6 +52,8 @@ static agent_dashboard_data_t s_dash;
 /* Set once the bridge has synced the clock; until then the dashboard shows "--:--". */
 static bool s_clock_synced;
 static int s_utc_offset_min;
+/* lv_tick of the latest "busy" per agent; 0 = idle. */
+static uint32_t s_busy_since[AGENT_COUNT];
 
 static lv_obj_t *s_modal;
 static lv_obj_t *s_modal_title;
@@ -177,6 +187,24 @@ static void clock_format(void)
     snprintf(s_dash.date_text, sizeof(s_dash.date_text), "%s %d", day_month, tm.tm_mday);
 }
 
+static int agent_index(const char *source)
+{
+    return strcmp(source, "codex") == 0 ? AGENT_CODEX : AGENT_CLAUDE;
+}
+
+/* Base mood: asleep without the bridge, scanning while any agent works, idle otherwise. */
+static void robot_base_update(void)
+{
+    bool busy = false;
+    for (int i = 0; i < AGENT_COUNT; i++) {
+        if (s_busy_since[i] != 0 && lv_tick_elaps(s_busy_since[i]) > BUSY_TIMEOUT_MS) {
+            s_busy_since[i] = 0;
+        }
+        busy |= s_busy_since[i] != 0;
+    }
+    robot_face_set_base(!s_dash.host_linked ? ROBOT_MOOD_SLEEP : busy ? ROBOT_MOOD_BUSY : ROBOT_MOOD_IDLE);
+}
+
 /* Runs every second in the LVGL task; the dashboard only redraws what changed. */
 static void status_timer_cb(lv_timer_t *timer)
 {
@@ -186,6 +214,7 @@ static void status_timer_cb(lv_timer_t *timer)
         clock_format();
     }
     agent_dashboard_update(&s_dash);
+    robot_base_update();
     if (!linked && s_modal_visible) {
         modal_hide(); /* the bridge releases the request to the terminal on its side */
     }
@@ -209,6 +238,7 @@ void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe)
     s_dash.ble_connected = false;
     s_dash.battery_percent = -1;
     agent_dashboard_update(&s_dash);
+    robot_base_update();
     modal_create();
     lv_timer_create(status_timer_cb, STATUS_POLL_MS, NULL);
     bsp_display_unlock();
@@ -252,12 +282,39 @@ void ui_show_event(const char *source, ui_event_kind_t kind, const char *text)
         [UI_EVENT_ATTENTION] = AGENT_DASHBOARD_TONE_WARN,
         [UI_EVENT_ERROR] = AGENT_DASHBOARD_TONE_ERROR,
     };
-    const char *name = strcmp(source, "codex") == 0 ? "Codex" : "Claude";
+    static const struct {
+        robot_mood_t mood;
+        uint32_t hold_ms;
+    } reactions[] = {
+        [UI_EVENT_DONE] = {ROBOT_MOOD_HAPPY, HAPPY_MS},
+        [UI_EVENT_ATTENTION] = {ROBOT_MOOD_ATTENTION, ATTENTION_MS},
+        [UI_EVENT_ERROR] = {ROBOT_MOOD_ERROR, ERROR_MS},
+    };
+    int agent = agent_index(source);
 
     bsp_display_lock(0);
-    snprintf(s_dash.status_text, sizeof(s_dash.status_text), "%s: %s", name, text);
+    snprintf(s_dash.status_text, sizeof(s_dash.status_text), "%s: %s", agent == AGENT_CODEX ? "Codex" : "Claude",
+             text);
     s_dash.status_tone = tones[kind];
     agent_dashboard_update(&s_dash);
+    /* Every event ends that agent's turn. Claude's arc is on the left, Codex's on the right. */
+    s_busy_since[agent] = 0;
+    robot_base_update();
+    robot_face_react(reactions[kind].mood, agent == AGENT_CODEX ? ROBOT_LOOK_RIGHT : ROBOT_LOOK_LEFT,
+                     reactions[kind].hold_ms);
+    bsp_display_unlock();
+}
+
+void ui_set_activity(const char *source, bool busy)
+{
+    bsp_display_lock(0);
+    /* 0 means idle, so a busy flag set at tick 0 is stored as 1. */
+    s_busy_since[agent_index(source)] = busy ? LV_MAX(lv_tick_get(), 1) : 0;
+    robot_base_update();
+    if (busy) {
+        /* A new turn replaces any reaction still showing (the base may already be busy). */
+        robot_face_react(ROBOT_MOOD_BUSY, ROBOT_LOOK_CENTER, 0);
+    }
     bsp_display_unlock();
 }
 

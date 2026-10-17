@@ -41,7 +41,10 @@ void ui_set_usage(const ui_usage_t *usage);
 void ui_set_clock_offset(int utc_offset_min);
 /* Battery state from the fuel gauge; percent < 0 hides the indicator. */
 void ui_set_battery(int percent, bool charging);
+/* Shows the event in the status line and on the robot's face; also ends that agent's busy state. */
 void ui_show_event(const char *source, ui_event_kind_t kind, const char *text);
+/* An agent ("claude" / "codex") started or stopped working; the robot scans while any is busy. */
+void ui_set_activity(const char *source, bool busy);
 void ui_show_confirm(uint32_t id, const char *tool, const char *summary, ui_risk_t risk);
 /* Hides the modal if it still shows request `id`. */
 void ui_cancel_confirm(uint32_t id);

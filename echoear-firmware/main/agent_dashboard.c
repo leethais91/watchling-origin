@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "assets/dashboard_assets.h"
+#include "robot_face.h"
 
 /*
  * Layout for the round panel (positions are offsets from the screen center). The usage
@@ -26,7 +27,6 @@
 #define COLOR_OK             0x22C55E
 #define COLOR_WARN           0xF59E0B
 #define COLOR_DANGER         0xEF4444
-#define COLOR_FACEPLATE      0x01122C /* robot visor around the eyes, sampled from the asset */
 
 /* Arc stack per side: soft glow behind, track + value, thin highlight centred on the value. */
 #define ARC_DIAMETER         320
@@ -49,31 +49,19 @@
 #define RIM_GLOW_WIDTH       8
 #define RIM_GLOW_OPA         LV_OPA_20
 
-#define TIME_Y               -137
-#define DATE_Y               -114
-#define ICONS_Y              -92
-#define AVATAR_Y             -14
-#define SIDE_X               101
-#define PERCENT_Y            -34
-#define PROVIDER_Y           -11
-#define WEEKLY_Y             10
-#define COST_Y               70
-#define COST_CAPTION_Y       94
-#define DIVIDER_Y            110
-#define DIVIDER_HALF_W       66
-#define STATUS_Y             126
+#define TIME_Y               -142
+#define DATE_Y               -119
+#define ICONS_Y              -99
+#define ROBOT_Y              -10
+#define SIDE_X               114
+#define PERCENT_Y            -22
+#define PROVIDER_Y           -2
+#define WEEKLY_Y             16
+#define COST_Y               88
+#define COST_CAPTION_Y       111
+#define STATUS_Y             134
 #define STATUS_W             184
 #define ICON_GAP             12
-
-/* Blink lids sit over the eyes baked into the avatar image (image pixel coordinates). */
-#define EYE_LEFT_X           48
-#define EYE_RIGHT_X          88
-#define EYE_TOP_Y            53
-#define LID_W                20
-#define LID_H                26
-#define BLINK_CLOSE_MS       90
-#define BLINK_OPEN_MS        120
-#define BLINK_PERIOD_MS      4200
 
 typedef struct {
     lv_obj_t *glow;
@@ -94,7 +82,6 @@ static lv_obj_t *s_battery_icon;
 static lv_obj_t *s_battery_text;
 static lv_obj_t *s_cost;
 static lv_obj_t *s_status;
-static lv_obj_t *s_lids[2];
 
 /* ---------- helpers ---------- */
 
@@ -166,8 +153,8 @@ static void usage_side_create(usage_side_t *side, lv_obj_t *parent, uint16_t sta
         lv_arc_set_bg_angles(arcs[i], start, end);
     }
 
-    side->percent = label_create(parent, &font_dash_bold_24, color, label_x, PERCENT_Y, "--");
-    label_create(parent, &font_dash_semibold_16, color, label_x, PROVIDER_Y, name);
+    side->percent = label_create(parent, &font_dash_bold_20, color, label_x, PERCENT_Y, "--");
+    label_create(parent, &font_dash_semibold_14, color, label_x, PROVIDER_Y, name);
     side->weekly = label_create(parent, &lv_font_montserrat_14, COLOR_TEXT_SECONDARY, label_x, WEEKLY_Y, "");
 }
 
@@ -188,23 +175,6 @@ static void usage_side_update(const usage_side_t *side, int percent, int weekly)
     if (weekly >= 0) {
         snprintf(text, sizeof(text), "7d %d%%", weekly);
         label_set_text_if_changed(side->weekly, text);
-    }
-}
-
-/* Horizontal hairline that fades out at both ends (two 2-stop gradients back to back). */
-static void divider_create(lv_obj_t *parent)
-{
-    for (int i = 0; i < 2; i++) {
-        lv_obj_t *half = lv_obj_create(parent);
-        lv_obj_remove_style_all(half);
-        lv_obj_set_size(half, DIVIDER_HALF_W, 1);
-        lv_obj_align(half, LV_ALIGN_CENTER, i == 0 ? -DIVIDER_HALF_W / 2 : DIVIDER_HALF_W / 2, DIVIDER_Y);
-        lv_obj_set_style_bg_opa(half, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(half, lv_color_hex(COLOR_GLOW_BLUE), 0);
-        lv_obj_set_style_bg_grad_color(half, lv_color_hex(COLOR_GLOW_BLUE), 0);
-        lv_obj_set_style_bg_grad_dir(half, LV_GRAD_DIR_HOR, 0);
-        lv_obj_set_style_bg_main_opa(half, i == 0 ? LV_OPA_TRANSP : LV_OPA_80, 0);
-        lv_obj_set_style_bg_grad_opa(half, i == 0 ? LV_OPA_80 : LV_OPA_TRANSP, 0);
     }
 }
 
@@ -255,46 +225,6 @@ static void battery_update(int percent, bool charging)
     label_set_text_if_changed(s_battery_icon, icon);
     text_color_set_if_changed(s_battery_icon, charging || percent > 20 ? COLOR_OK : COLOR_DANGER);
     label_set_text_if_changed(s_battery_text, text);
-}
-
-static void blink_anim_cb(void *var, int32_t height)
-{
-    LV_UNUSED(var);
-    lv_obj_set_height(s_lids[0], height);
-    lv_obj_set_height(s_lids[1], height);
-}
-
-/* Robot avatar (pre-rendered with its halo) plus eyelids that drop over the eyes now and then. */
-static void avatar_create(lv_obj_t *parent)
-{
-    lv_obj_t *avatar = lv_image_create(parent);
-    lv_image_set_src(avatar, &img_robot_avatar);
-    lv_obj_align(avatar, LV_ALIGN_CENTER, 0, AVATAR_Y);
-
-    const int32_t eye_x[] = {EYE_LEFT_X, EYE_RIGHT_X};
-    for (int i = 0; i < 2; i++) {
-        lv_obj_t *lid = lv_obj_create(avatar);
-        lv_obj_remove_style_all(lid);
-        lv_obj_set_pos(lid, eye_x[i] - LID_W / 2, EYE_TOP_Y);
-        lv_obj_set_size(lid, LID_W, 0);
-        lv_obj_set_style_radius(lid, LID_W / 2, 0);
-        lv_obj_set_style_bg_opa(lid, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(lid, lv_color_hex(COLOR_FACEPLATE), 0);
-        s_lids[i] = lid;
-    }
-
-    /* Two tiny areas redraw for ~0.2 s every few seconds; the rest of the screen stays static. */
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_lids[0]);
-    lv_anim_set_exec_cb(&a, blink_anim_cb);
-    lv_anim_set_values(&a, 0, LID_H);
-    lv_anim_set_duration(&a, BLINK_CLOSE_MS);
-    lv_anim_set_reverse_duration(&a, BLINK_OPEN_MS);
-    lv_anim_set_repeat_delay(&a, BLINK_PERIOD_MS);
-    lv_anim_set_delay(&a, BLINK_PERIOD_MS);
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-    lv_anim_start(&a);
 }
 
 static void rim_create(lv_obj_t *parent, int32_t diameter, int32_t width, lv_opa_t opa)
@@ -352,11 +282,10 @@ lv_obj_t *agent_dashboard_create(lv_obj_t *parent)
     s_date = label_create(root, &lv_font_montserrat_16, COLOR_TEXT_SOFT, 0, DATE_Y, "");
     status_icons_create(root);
 
-    avatar_create(root);
+    robot_face_create(root, 0, ROBOT_Y);
 
     s_cost = label_create(root, &font_dash_bold_30, COLOR_TEXT_PRIMARY, 0, COST_Y, "$--");
     label_create(root, &lv_font_montserrat_14, COLOR_TEXT_SOFT, 0, COST_CAPTION_Y, "Today");
-    divider_create(root);
 
     s_status = label_create(root, &lv_font_montserrat_16, COLOR_TEXT_STATUS, 0, STATUS_Y, "");
     lv_obj_set_width(s_status, STATUS_W);

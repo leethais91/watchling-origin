@@ -36,6 +36,15 @@ open tools/sfx-candidates/index.html                       # listen and pick
 python3 tools/sound_effects.py embed confirm=robot:2 done=robot:1 attention=robot:1 error=robot:1
 ```
 
+### Robot face
+
+The robot head (`main/robot_face.c`) is one image with an empty visor
+(`main/assets/robot_head.png`, generated with Codex image generation); the eyes are drawn by LVGL.
+It idles (random blinks, glances), scans while Claude Code or Codex is working, sleeps without the
+bridge, and reacts to events: happy on done, amber on waiting for input, `× ×` on errors, looking
+toward the agent's arc (Claude left, Codex right). The working state needs the `UserPromptSubmit`
+hook, so re-run `npm run hooks:install` after updating the bridge.
+
 ### Dashboard simulator
 
 The idle dashboard (`main/agent_dashboard.c`) is plain LVGL, so it also builds on the host
@@ -46,7 +55,8 @@ against the same LVGL 9.6 the firmware uses (run `idf.py reconfigure` once so
 cd echoear-firmware/simulator
 ./render-screenshot.sh /tmp/dash.png              # 360x360 PNG with the round mask
 ./render-screenshot.sh /tmp/dash.png --stress     # worst-case values; also --unknown, --after-ms N
-./cmake-out/dashboard_sim                         # live SDL window (blink animation)
+./render-screenshot.sh /tmp/dash.png --mood happy # idle busy sleep happy attention error
+./cmake-out/dashboard_sim                         # live SDL window, cycles through the robot moods
 ```
 
 On the device, usage, cost, status, clock/date and the USB link icon come from the bridge

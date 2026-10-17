@@ -180,6 +180,8 @@ static void on_host_message(const char *json, size_t len)
         audio_speech_begin((uint16_t)json_int(msg, "id", 0), (size_t)json_int(msg, "bytes", 0));
     } else if (strcmp(type, "say_end") == 0) {
         audio_speech_end((uint16_t)json_int(msg, "id", 0));
+    } else if (strcmp(type, "activity") == 0) {
+        ui_set_activity(json_str(msg, "src"), cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(msg, "busy")));
     } else if (strcmp(type, "event") == 0) {
         handle_event(msg);
     } else if (strcmp(type, "confirm_req") == 0) {

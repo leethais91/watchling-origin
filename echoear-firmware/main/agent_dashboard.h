@@ -1,6 +1,6 @@
 /*
  * Idle dashboard for the round 360x360 panel: clock, link icons, Claude/Codex usage
- * arcs, robot avatar, today's cost and a one-line status.
+ * arcs, animated robot head (robot_face.c), today's cost and a one-line status.
  *
  * Pure LVGL (no BSP calls) so the host simulator renders the same code. Like LVGL
  * itself, these functions are not thread-safe: hold the display lock when calling them.
