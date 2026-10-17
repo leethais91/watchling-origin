@@ -15,7 +15,7 @@
 #include "esp_timer.h"
 #include "bsp/esp-bsp.h"
 
-#include "beep.h"
+#include "audio.h"
 #include "host_link.h"
 #include "ui.h"
 
@@ -93,8 +93,13 @@ static void handle_event(const cJSON *msg)
     ui_event_kind_t event_kind = strcmp(kind, "error") == 0       ? UI_EVENT_ERROR
                                  : strcmp(kind, "attention") == 0 ? UI_EVENT_ATTENTION
                                                                   : UI_EVENT_DONE;
+    static const audio_chime_t chimes[] = {
+        [UI_EVENT_DONE] = AUDIO_CHIME_DONE,
+        [UI_EVENT_ATTENTION] = AUDIO_CHIME_ATTENTION,
+        [UI_EVENT_ERROR] = AUDIO_CHIME_ERROR,
+    };
     ui_show_event(json_str(msg, "src"), event_kind, json_str(msg, "text"));
-    beep_play();
+    audio_play_chime(chimes[event_kind]);
 }
 
 static void handle_confirm_request(const cJSON *msg)
@@ -105,7 +110,19 @@ static void handle_confirm_request(const cJSON *msg)
                                                    : UI_RISK_MEDIUM;
     ui_show_confirm((uint32_t)json_int(msg, "id", 0), json_str(msg, "tool"), json_str(msg, "summary"),
                     ui_risk, json_str(msg, "project"));
-    beep_play();
+    audio_play_chime(AUDIO_CHIME_CONFIRM);
+}
+
+/* Runs on the host link RX task, like the speech begin/end messages. */
+static void on_host_audio(const uint8_t *payload, size_t len)
+{
+    if (len <= 6) {
+        return;
+    }
+    uint16_t id = (uint16_t)(payload[0] | payload[1] << 8);
+    uint32_t offset = (uint32_t)payload[2] | (uint32_t)payload[3] << 8 | (uint32_t)payload[4] << 16 |
+                      (uint32_t)payload[5] << 24;
+    audio_speech_data(id, offset, payload + 6, len - 6);
 }
 
 /* Runs on the host link RX task. */
@@ -127,6 +144,10 @@ static void on_host_message(const char *json, size_t len)
         handle_usage(msg);
     } else if (strcmp(type, "time") == 0) {
         handle_time(msg);
+    } else if (strcmp(type, "say") == 0) {
+        audio_speech_begin((uint16_t)json_int(msg, "id", 0), (size_t)json_int(msg, "bytes", 0));
+    } else if (strcmp(type, "say_end") == 0) {
+        audio_speech_end((uint16_t)json_int(msg, "id", 0));
     } else if (strcmp(type, "event") == 0) {
         handle_event(msg);
     } else if (strcmp(type, "confirm_req") == 0) {
@@ -153,11 +174,11 @@ void app_main(void)
     bsp_display_backlight_on();
     ui_init(on_decision, host_is_linked);
 
-    if (beep_init() != ESP_OK) {
+    if (audio_init() != ESP_OK) {
         ESP_LOGE(TAG, "Speaker unavailable; continuing without sound");
     }
 
-    ESP_ERROR_CHECK(host_link_start(on_host_message));
+    ESP_ERROR_CHECK(host_link_start(on_host_message, on_host_audio));
     /* Announce ourselves in case the bridge is already connected (e.g. after a reset). */
     send_hello();
 }

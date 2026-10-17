@@ -61,5 +61,10 @@ How it behaves:
 - While a request is on the device, the Claude Code terminal waits (spinner). Unanswered
   requests fall back to the terminal after `ECHOEAR_CONFIRM_TIMEOUT_S` (default 120).
 - Codex usage and "done" events come from `~/.codex/sessions`; no Codex config changes.
+- Sound: the device chimes on permission requests, finished tasks, idle waits and errors, and reads
+  permission requests and finished tasks aloud. Speech is made on the Mac with `say`:
+  `ECHOEAR_TTS=off` mutes it (chimes stay). By default it uses the macOS system voice (System
+  Settings → Accessibility → Spoken Content), which is the only way to get Siri voices; set
+  `ECHOEAR_TTS_VOICE=Samantha` to force a voice listed by `say -v '?'`.
 
 Wire format and message types: [docs/device-protocol.md](docs/device-protocol.md).

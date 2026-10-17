@@ -4,12 +4,17 @@
  *
  *   ECHOEAR_PORT=/dev/cu.usbmodemXXXX  skip auto-detection
  *   ECHOEAR_CONFIRM_TIMEOUT_S=120      how long a request waits on the device
+ *   ECHOEAR_TTS / ECHOEAR_TTS_VOICE    spoken announcements, see tts/tts-engine.ts
  */
 import { clockMessage } from "./clock/clock-message.js";
 import { startIpcServer } from "./ipc/ipc-server.js";
 import { SOCKET_PATH } from "./ipc/paths.js";
 import { PermissionBroker } from "./permission/permission-broker.js";
+import type { AgentEventMessage } from "./protocol/messages.js";
+import { Speaker } from "./speech/speaker.js";
+import { doneSpeech, permissionSpeech } from "./speech/speech-text.js";
 import { SerialTransport } from "./transport/serial-transport.js";
+import { createTtsEngine } from "./tts/tts-engine.js";
 import { startCodexSessionWatcher } from "./usage/codex-session-watcher.js";
 import { UsageStore } from "./usage/usage-store.js";
 
@@ -24,7 +29,19 @@ const log = (...args: unknown[]) => console.log(new Date().toLocaleTimeString(),
 
 const transport = new SerialTransport(process.env.ECHOEAR_PORT);
 const usage = new UsageStore();
-const broker = new PermissionBroker((msg) => transport.send(msg), CONFIRM_TIMEOUT_MS);
+const tts = createTtsEngine();
+const speaker = tts && new Speaker(tts, transport, (err) => log(`speech failed: ${err.message}`));
+const broker = new PermissionBroker((msg) => {
+  const sent = transport.send(msg);
+  if (sent && msg.t === "confirm_req") void speaker?.say(permissionSpeech(msg));
+  return sent;
+}, CONFIRM_TIMEOUT_MS);
+
+/** Shows the event on the device (which chimes) and reads finished tasks aloud. */
+function sendEvent(event: Omit<AgentEventMessage, "t">): void {
+  transport.send({ t: "event", ...event });
+  if (event.kind === "done") void speaker?.say(doneSpeech(event.src, event.text));
+}
 
 let usageTimer: NodeJS.Timeout | null = null;
 usage.on("change", () => {
@@ -64,14 +81,13 @@ await startIpcServer({
     return broker.request(input, signal);
   },
   statusline: (input) => usage.updateFromStatusline(input),
-  event: (event) => transport.send({ t: "event", ...event }),
+  event: sendEvent,
 });
 
 await startCodexSessionWatcher({
   onRateLimits: (limits) => usage.updateCodex(limits),
   onTaskComplete: (message) =>
-    transport.send({
-      t: "event",
+    sendEvent({
       src: "codex",
       kind: "done",
       text: message.replace(/\s+/g, " ").trim().slice(0, MAX_EVENT_TEXT_CHARS) || "Task finished",
@@ -81,7 +97,7 @@ await startCodexSessionWatcher({
 setInterval(() => transport.send(clockMessage()), CLOCK_RESYNC_MS).unref();
 
 transport.start();
-log(`bridge listening on ${SOCKET_PATH}`);
+log(`bridge listening on ${SOCKET_PATH}${tts ? "" : " (speech off)"}`);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {

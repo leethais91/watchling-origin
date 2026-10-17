@@ -9,6 +9,8 @@
 
 export const FrameType = {
   Json: 0x01,
+  /** Speech PCM chunk: id:u16 LE | offset:u32 LE | samples (see speech/speaker.ts). */
+  Audio: 0x02,
 } as const;
 
 /** Upper bound for a decoded frame; anything longer is treated as noise. */

@@ -20,6 +20,13 @@ export interface ClockMessage {
   tz: number;
 }
 
+/** Speech clip header; the PCM (16 kHz mono s16le) follows in FrameType.Audio frames. */
+export interface SpeechBeginMessage {
+  t: "say";
+  id: number;
+  bytes: number;
+}
+
 export interface ConfirmRequestMessage {
   t: "confirm_req";
   id: number;
@@ -42,6 +49,8 @@ export type HostMessage =
   | { t: "ping" }
   | UsageMessage
   | ClockMessage
+  | SpeechBeginMessage
+  | { t: "say_end"; id: number }
   | AgentEventMessage
   | ConfirmRequestMessage
   | { t: "confirm_cancel"; id: number };

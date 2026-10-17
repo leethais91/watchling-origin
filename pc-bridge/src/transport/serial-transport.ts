@@ -55,6 +55,12 @@ export class SerialTransport extends EventEmitter<TransportEvents> {
     return true;
   }
 
+  sendAudio(payload: Uint8Array): boolean {
+    if (!this.port?.isOpen) return false;
+    this.port.write(encodeFrame(FrameType.Audio, payload));
+    return true;
+  }
+
   close(): void {
     this.stopped = true;
     this.port?.close();

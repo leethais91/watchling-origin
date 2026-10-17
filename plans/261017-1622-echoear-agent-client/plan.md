@@ -10,6 +10,13 @@ Status: Phase 1 + Phase 2 done (verified on device 2026-10-17); Phase 3 next
 - Clock/date synced from the bridge (`time` message). Wi-Fi/BLE/battery are mock until providers exist (no Wi-Fi, BLE or
   fuel-gauge driver yet). Working/notification screens, page dots and waveform not built.
 
+## Phase 4a: sound + TTS (2026-10-17)
+- Speaker side done: synthesized chimes per event kind (`main/audio.c`, replaces beep) and English
+  TTS made on the host (`pc-bridge/src/tts/`, macOS `say` behind a `TtsEngine` interface for a
+  cloud engine later), streamed as `say` + `0x02` PCM frames + `say_end`, played after the chime.
+- Spoken: permission requests and finished tasks. Idle waits / errors: chime only.
+- Still open from Phase 4: mic (ES7210), ESP-SR AFE, MultiNet voice commands.
+
 ## Phase 2 findings (live test 2026-10-17)
 - While the PermissionRequest hook waits, the Claude Code terminal shows only a spinner (no
   parallel dialog). An unanswered request blocks the session until ECHOEAR_CONFIRM_TIMEOUT_S

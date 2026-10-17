@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #define FRAME_TYPE_JSON  0x01
+#define FRAME_TYPE_AUDIO 0x02 /* speech chunk: id:u16 LE | offset:u32 LE | s16le mono PCM */
 
 /* Worst-case COBS output size for `len` input bytes. */
 #define FRAME_COBS_MAX_ENCODED(len) ((len) + (len) / 254 + 1)

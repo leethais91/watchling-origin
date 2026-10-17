@@ -12,7 +12,9 @@ ESP log text shares the port with protocol frames.
 - CRC-16/CCITT-FALSE (poly `0x1021`, init `0xFFFF`) over `type | payload`; check value for `"123456789"` is `0x29B1`.
 - Leading `0x00` separates a frame from preceding log text. Chunks that fail COBS/CRC are treated as log text.
 - Max decoded frame: 4096 bytes.
-- `type 0x01` = UTF-8 JSON. Other values are reserved (audio in later phases).
+- `type 0x01` = UTF-8 JSON.
+- `type 0x02` = speech PCM chunk: `id:u16 LE | offset:u32 LE | samples` (16 kHz mono s16le, ≤ 4000 sample bytes per frame).
+- Other values are reserved.
 
 Implementations: `pc-bridge/src/protocol/frame-codec.ts`, `echoear-firmware/main/frame_codec.c`.
 Both are cross-checked byte-for-byte.
@@ -29,7 +31,9 @@ Field `t` is the message type. Percentages are integers 0–100 or `null` when u
 | `ping` | – | Every 2 s; device replies `pong`. Device shows "no bridge" after 5 s silence |
 | `usage` | `claude:{h5,d7,costToday}`, `codex:{h5,d7}` | 5-hour / 7-day window usage; `costToday` USD (estimated, list price) |
 | `time` | `epoch`, `tz` | Unix seconds (UTC) and host offset in minutes east of UTC (Asia/Saigon = `420`). Sent after `hello` and every 10 min; the device sets its clock and keeps ticking between syncs |
-| `event` | `src: claude\|codex`, `kind: done\|attention\|error`, `text` | Turn finished / waiting for input / API error |
+| `event` | `src: claude\|codex`, `kind: done\|attention\|error`, `text` | Turn finished / waiting for input / API error. Device plays a chime per kind |
+| `say` | `id`, `bytes` | Start of a speech clip (`bytes` ≤ 480000 = 15 s, even); PCM follows in `0x02` frames |
+| `say_end` | `id` | Clip complete; device plays it after any queued chime. Missing chunks play as silence |
 | `confirm_req` | `id`, `tool`, `summary`, `risk: low\|medium\|high`, `project` | Show permission modal |
 | `confirm_cancel` | `id` | Request resolved elsewhere (timeout, terminal, hook exited); hide modal if it shows `id` |
 

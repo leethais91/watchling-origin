@@ -20,6 +20,7 @@ static const char *TAG = "host_link";
 #define RX_TASK_STACK       6144
 
 static host_link_rx_cb_t s_on_message;
+static host_link_audio_cb_t s_on_audio;
 static SemaphoreHandle_t s_tx_lock;
 
 /* RX frame assembly (RX task only). */
@@ -39,6 +40,10 @@ static void handle_raw_frame(size_t raw_len)
     uint16_t crc = (uint16_t)(s_rx_body[body_len - 2] << 8) | s_rx_body[body_len - 1];
     if (frame_crc16(s_rx_body, body_len - 2) != crc) {
         ESP_LOGW(TAG, "Dropped frame with bad CRC");
+        return;
+    }
+    if (s_rx_body[0] == FRAME_TYPE_AUDIO) {
+        s_on_audio(&s_rx_body[1], body_len - 3);
         return;
     }
     if (s_rx_body[0] != FRAME_TYPE_JSON) {
@@ -74,9 +79,10 @@ static void rx_task(void *arg)
     }
 }
 
-esp_err_t host_link_start(host_link_rx_cb_t on_message)
+esp_err_t host_link_start(host_link_rx_cb_t on_message, host_link_audio_cb_t on_audio)
 {
     s_on_message = on_message;
+    s_on_audio = on_audio;
     s_tx_lock = xSemaphoreCreateMutex();
     if (s_tx_lock == NULL) {
         return ESP_ERR_NO_MEM;
