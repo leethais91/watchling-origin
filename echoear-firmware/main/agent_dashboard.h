@@ -12,7 +12,9 @@
 
 typedef enum {
     AGENT_DASHBOARD_TONE_NEUTRAL,
-    AGENT_DASHBOARD_TONE_OK,
+    /* A finished task, in the colour of the agent that sent it (the text carries no name). */
+    AGENT_DASHBOARD_TONE_CLAUDE,
+    AGENT_DASHBOARD_TONE_CODEX,
     AGENT_DASHBOARD_TONE_WARN,
     AGENT_DASHBOARD_TONE_ERROR,
 } agent_dashboard_tone_t;

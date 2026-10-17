@@ -7,6 +7,7 @@
 #include "lvgl.h"
 
 #include "agent_dashboard.h"
+#include "assets/dashboard_assets.h"
 #include "robot_face.h"
 
 /*
@@ -139,7 +140,7 @@ static void modal_create(void)
     s_modal_summary = lv_label_create(box);
     lv_obj_set_width(s_modal_summary, lv_pct(100));
     lv_label_set_long_mode(s_modal_summary, LV_LABEL_LONG_MODE_WRAP);
-    lv_obj_set_style_text_font(s_modal_summary, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(s_modal_summary, &font_mono_15, 0);
     lv_obj_set_style_text_color(s_modal_summary, lv_color_white(), 0); /* the theme darkens text in the box */
     lv_obj_set_style_text_align(s_modal_summary, LV_TEXT_ALIGN_CENTER, 0);
 
@@ -185,6 +186,24 @@ static void clock_format(void)
     char day_month[12];
     strftime(day_month, sizeof(day_month), "%a, %b", &tm);
     snprintf(s_dash.date_text, sizeof(s_dash.date_text), "%s %d", day_month, tm.tm_mday);
+}
+
+/* snprintf cuts by bytes; drop a multi-byte UTF-8 character it left incomplete at the end. */
+static void utf8_trim_partial(char *text)
+{
+    size_t len = strlen(text);
+    size_t start = len;
+    while (start > 0 && ((unsigned char)text[start - 1] & 0xC0) == 0x80) {
+        start--; /* skip continuation bytes back to the lead byte */
+    }
+    if (start == 0) {
+        return;
+    }
+    unsigned char lead = (unsigned char)text[start - 1];
+    size_t need = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : lead >= 0xC0 ? 2 : 1;
+    if (len - (start - 1) < need) {
+        text[start - 1] = '\0';
+    }
 }
 
 static int agent_index(const char *source)
@@ -278,7 +297,7 @@ void ui_set_battery(int percent, bool charging)
 void ui_show_event(const char *source, ui_event_kind_t kind, const char *text)
 {
     static const agent_dashboard_tone_t tones[] = {
-        [UI_EVENT_DONE] = AGENT_DASHBOARD_TONE_OK,
+        [UI_EVENT_DONE] = AGENT_DASHBOARD_TONE_NEUTRAL, /* replaced by the agent's colour below */
         [UI_EVENT_ATTENTION] = AGENT_DASHBOARD_TONE_WARN,
         [UI_EVENT_ERROR] = AGENT_DASHBOARD_TONE_ERROR,
     };
@@ -293,9 +312,12 @@ void ui_show_event(const char *source, ui_event_kind_t kind, const char *text)
     int agent = agent_index(source);
 
     bsp_display_lock(0);
-    snprintf(s_dash.status_text, sizeof(s_dash.status_text), "%s: %s", agent == AGENT_CODEX ? "Codex" : "Claude",
-             text);
-    s_dash.status_tone = tones[kind];
+    /* No "Claude:" prefix: the colour (done) and the robot's gaze tell the agents apart. */
+    snprintf(s_dash.status_text, sizeof(s_dash.status_text), "%s", text);
+    utf8_trim_partial(s_dash.status_text);
+    s_dash.status_tone = kind != UI_EVENT_DONE ? tones[kind]
+                         : agent == AGENT_CODEX ? AGENT_DASHBOARD_TONE_CODEX
+                                                : AGENT_DASHBOARD_TONE_CLAUDE;
     agent_dashboard_update(&s_dash);
     /* Every event ends that agent's turn. Claude's arc is on the left, Codex's on the right. */
     s_busy_since[agent] = 0;

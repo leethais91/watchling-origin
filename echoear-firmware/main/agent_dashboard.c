@@ -287,10 +287,11 @@ lv_obj_t *agent_dashboard_create(lv_obj_t *parent)
     s_cost = label_create(root, &font_dash_bold_30, COLOR_TEXT_PRIMARY, 0, COST_Y, "$--");
     label_create(root, &lv_font_montserrat_14, COLOR_TEXT_SOFT, 0, COST_CAPTION_Y, "Today");
 
-    s_status = label_create(root, &lv_font_montserrat_16, COLOR_TEXT_STATUS, 0, STATUS_Y, "");
+    /* Agent text: monospace, and the only dashboard font with Vietnamese glyphs. */
+    s_status = label_create(root, &font_mono_15, COLOR_TEXT_STATUS, 0, STATUS_Y, "");
     lv_obj_set_width(s_status, STATUS_W);
     lv_label_set_long_mode(s_status, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_set_height(s_status, lv_font_get_line_height(&lv_font_montserrat_16));
+    lv_obj_set_height(s_status, lv_font_get_line_height(&font_mono_15));
     lv_obj_align(s_status, LV_ALIGN_CENTER, 0, STATUS_Y);
 
     return root;
@@ -300,7 +301,8 @@ void agent_dashboard_update(const agent_dashboard_data_t *data)
 {
     static const uint32_t tone_colors[] = {
         [AGENT_DASHBOARD_TONE_NEUTRAL] = COLOR_TEXT_STATUS,
-        [AGENT_DASHBOARD_TONE_OK] = COLOR_OK,
+        [AGENT_DASHBOARD_TONE_CLAUDE] = COLOR_CLAUDE_HI,
+        [AGENT_DASHBOARD_TONE_CODEX] = COLOR_CODEX_HI,
         [AGENT_DASHBOARD_TONE_WARN] = COLOR_WARN,
         [AGENT_DASHBOARD_TONE_ERROR] = COLOR_DANGER,
     };

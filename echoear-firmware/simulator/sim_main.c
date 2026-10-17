@@ -188,8 +188,8 @@ int main(int argc, char **argv)
         data.battery_percent = 8;
         snprintf(data.time_text, sizeof(data.time_text), "23:59");
         snprintf(data.date_text, sizeof(data.date_text), "Wed, Sep 30");
-        snprintf(data.status_text, sizeof(data.status_text), "Claude: Refactored the permission broker and all tests");
-        data.status_tone = AGENT_DASHBOARD_TONE_WARN;
+        snprintf(data.status_text, sizeof(data.status_text), "Đã sửa xong lỗi build, tất cả test đều pass");
+        data.status_tone = AGENT_DASHBOARD_TONE_CLAUDE;
     } else if (unknown) {
         data = (agent_dashboard_data_t){
             .claude_usage_percent = -1,

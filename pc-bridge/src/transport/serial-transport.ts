@@ -51,7 +51,8 @@ export class SerialTransport extends EventEmitter<TransportEvents> {
 
   send(msg: HostMessage): boolean {
     if (!this.port?.isOpen) return false;
-    this.port.write(encodeFrame(FrameType.Json, Buffer.from(JSON.stringify(msg), "utf8")));
+    // NFC: the device font has precomposed letters only (Vietnamese "ế", not "e" + two marks).
+    this.port.write(encodeFrame(FrameType.Json, Buffer.from(JSON.stringify(msg).normalize("NFC"), "utf8")));
     return true;
   }
 
