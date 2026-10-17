@@ -31,6 +31,9 @@
 #define BUTTON_OFFSET_X   ((BUTTON_W + BUTTON_GAP) / 2)
 #define BUTTON_OFFSET_Y   92
 #define BUTTON_LABEL_INSET 10
+#define SUMMARY_W         290
+#define SUMMARY_H         144
+#define SUMMARY_Y         92
 #define RING_PULSE_MS     500
 #define STATUS_POLL_MS    1000
 
@@ -115,8 +118,9 @@ static void modal_create(void)
 
     /* Long commands scroll by dragging inside this box. */
     lv_obj_t *box = lv_obj_create(s_modal);
-    lv_obj_set_size(box, 260, 100);
-    lv_obj_align(box, LV_ALIGN_CENTER, 0, -8);
+    /* Fills the band between the tool name and the buttons. */
+    lv_obj_set_size(box, SUMMARY_W, SUMMARY_H);
+    lv_obj_align(box, LV_ALIGN_TOP_MID, 0, SUMMARY_Y);
     lv_obj_set_style_bg_opa(box, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(box, 0, 0);
     lv_obj_set_style_pad_all(box, 4, 0);
@@ -135,13 +139,13 @@ static void modal_create(void)
     lv_obj_set_hidden(s_modal, true);
 }
 
-static void modal_show(uint32_t id, const char *tool, const char *summary, ui_risk_t risk, const char *project)
+static void modal_show(uint32_t id, const char *tool, const char *summary, ui_risk_t risk)
 {
     uint32_t ring = risk == UI_RISK_HIGH ? COLOR_DANGER : COLOR_WARN;
     s_modal_id = id;
     lv_obj_set_style_border_color(s_modal, lv_color_hex(ring), 0);
     lv_obj_set_style_text_color(s_modal_tool, lv_color_hex(ring), 0);
-    lv_label_set_text_fmt(s_modal_title, "Claude%s%s", project[0] ? " - " : "", project);
+    lv_label_set_text(s_modal_title, "Claude");
     lv_label_set_text(s_modal_tool, tool);
     lv_label_set_text(s_modal_summary, summary);
     lv_obj_scroll_to_y(lv_obj_get_parent(s_modal_summary), 0, LV_ANIM_OFF);
@@ -257,10 +261,10 @@ void ui_show_event(const char *source, ui_event_kind_t kind, const char *text)
     bsp_display_unlock();
 }
 
-void ui_show_confirm(uint32_t id, const char *tool, const char *summary, ui_risk_t risk, const char *project)
+void ui_show_confirm(uint32_t id, const char *tool, const char *summary, ui_risk_t risk)
 {
     bsp_display_lock(0);
-    modal_show(id, tool, summary, risk, project);
+    modal_show(id, tool, summary, risk);
     bsp_display_unlock();
 }
 

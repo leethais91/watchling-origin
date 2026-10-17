@@ -141,8 +141,7 @@ static void handle_confirm_request(const cJSON *msg)
     ui_risk_t ui_risk = strcmp(risk, "high") == 0 ? UI_RISK_HIGH
                         : strcmp(risk, "low") == 0 ? UI_RISK_LOW
                                                    : UI_RISK_MEDIUM;
-    ui_show_confirm((uint32_t)json_int(msg, "id", 0), json_str(msg, "tool"), json_str(msg, "summary"),
-                    ui_risk, json_str(msg, "project"));
+    ui_show_confirm((uint32_t)json_int(msg, "id", 0), json_str(msg, "tool"), json_str(msg, "summary"), ui_risk);
     audio_play_chime(AUDIO_CHIME_CONFIRM);
 }
 

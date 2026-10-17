@@ -42,6 +42,6 @@ void ui_set_clock_offset(int utc_offset_min);
 /* Battery state from the fuel gauge; percent < 0 hides the indicator. */
 void ui_set_battery(int percent, bool charging);
 void ui_show_event(const char *source, ui_event_kind_t kind, const char *text);
-void ui_show_confirm(uint32_t id, const char *tool, const char *summary, ui_risk_t risk, const char *project);
+void ui_show_confirm(uint32_t id, const char *tool, const char *summary, ui_risk_t risk);
 /* Hides the modal if it still shows request `id`. */
 void ui_cancel_confirm(uint32_t id);
