@@ -1,5 +1,7 @@
 # Idle chatter design
 
+> Historical design proposal. Some details differ from the shipped code. See [the current chatter guide](../chatter.md).
+
 When nobody needs it, the robot says something silly out loud in Vietnamese. This page covers
 the character, when it speaks, the line catalog, how a line is picked, and how to add lines.
 

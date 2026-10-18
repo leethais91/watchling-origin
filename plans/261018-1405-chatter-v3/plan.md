@@ -23,7 +23,7 @@ source: skill
 ## Overview
 Replace live `say -v Linh` chatter with 50 pre-generated clips in one designed Southern female voice,
 optional ElevenLabs SFX before 25% of lines, v3 selection rules, and a face mood shown while the clip
-plays. Spec: `docs/chatter-design-v3.md` (§0 overrides the rest). Decisions/rationale:
+plays. Spec: `docs/archive/chatter-design-v3.md` (§0 overrides the rest). Decisions/rationale:
 `plans/reports/brainstorm-261018-1405-chatter-v3-spec-review-report.md`.
 
 ## Phases

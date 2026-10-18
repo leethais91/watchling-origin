@@ -1,6 +1,6 @@
 /**
  * Makes the chatter voice clips with Gemini TTS. Run by hand; needs GEMINI_API_KEY (the bridge
- * itself never calls the API). See docs/chatter-design-v3.md.
+ * itself never calls the API). See docs/development.md and docs/chatter.md.
  *
  *   npm run voice:design                          create the candidate voices (+ their samples)
  *   npm run voice:audition                        same few lines in every candidate voice

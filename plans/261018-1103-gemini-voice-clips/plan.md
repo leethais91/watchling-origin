@@ -55,7 +55,7 @@ Three layers:
    | error | pained but comic | `<argh>` Ui da… lỗi rồi. |
    | surprised | startled, then giggly | `<gasp>` Hả?! `<giggle>` Nhột quá! |
    | sleep | sleepy, drowsy, very soft | `<yawn>` Buồn ngủ quá… khò… khò… |
-   | chatter | casual, playful, a bit bored | lines from `docs/chatter-design.md` |
+   | chatter | casual, playful, a bit bored | lines from `docs/archive/chatter-design.md` |
 
    Two variants per mood so repeated taps don't always sound the same.
 3. **Audition**: create the 3 voices, synthesize the same ~5 lines (one per mood + one chatter)
@@ -93,7 +93,7 @@ Three layers:
 
 ### Docs
 - `docs/device-protocol.md`: new device → bridge `mood` message.
-- `docs/chatter-design.md`: lines now come from clips; how to regenerate.
+- `docs/archive/chatter-design.md`: lines now come from clips; how to regenerate.
 - README: voice clip workflow.
 
 ## Validation

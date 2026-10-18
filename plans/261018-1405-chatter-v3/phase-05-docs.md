@@ -12,16 +12,16 @@ dependencies: [2, 3, 4]
 Make the docs describe what was built and how to regenerate audio.
 
 ## Requirements
-- `docs/chatter-design.md` becomes the maintained page for v3 behaviour (character, timing, catalog
+- `docs/archive/chatter-design.md` becomes the maintained page for v3 behaviour (character, timing, catalog
   table with ids, selection, cooldowns, SFX, moods, trying it out, writing/regenerating lines).
-- `docs/chatter-design-v3.md`: keep as the design proposal, mark "implemented — see chatter-design.md",
+- `docs/archive/chatter-design-v3.md`: keep as the design proposal, mark "implemented — see chatter-design.md",
   or delete if the user prefers a single page (ask).
 - `docs/device-protocol.md`: `say.mood/look` (done in phase 3, verify).
 - README: SFX/voice generation workflow (keys needed only for generation).
 - `plans/261018-1103-gemini-voice-clips/plan.md`: status note that chatter moved to this plan.
 
 ## Related Code Files
-- Modify: `docs/chatter-design.md`, `docs/chatter-design-v3.md`, `README.md`,
+- Modify: `docs/archive/chatter-design.md`, `docs/archive/chatter-design-v3.md`, `README.md`,
   `plans/261018-1103-gemini-voice-clips/plan.md`
 
 ## Implementation Steps

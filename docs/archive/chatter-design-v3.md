@@ -1,5 +1,7 @@
 # Watchling
 
+> Historical design proposal. Some details differ from the shipped code. See [the current chatter guide](../chatter.md).
+
 ## Idle Chatter & Voice Personality — Design Specification v3.0
 
 **Trạng thái:** Reviewed 2026-10-18 — xem §0 (quyết định review, ưu tiên hơn phần còn lại khi mâu thuẫn)

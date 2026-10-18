@@ -1,6 +1,6 @@
 # Brainstorm: review chatter spec v3 trước khi triển khai
 
-Date: 2026-10-18 · Spec: `docs/chatter-design-v3.md` · Supersedes chatter part of `plans/261018-1103-gemini-voice-clips/plan.md`
+Date: 2026-10-18 · Spec: `docs/archive/chatter-design-v3.md` · Supersedes chatter part of `plans/261018-1103-gemini-voice-clips/plan.md`
 
 ## Problem
 Spec v3 (50 câu, Gemini TTS pre-generated, ElevenLabs SFX, biểu cảm LVGL) viết độc lập với code hiện tại → nhiều chỗ lệch protocol/firmware và over-engineering.
@@ -46,7 +46,7 @@ Spec v3 (50 câu, Gemini TTS pre-generated, ElevenLabs SFX, biểu cảm LVGL) v
 2. Runtime: catalog, selector, cooldowns, timing, `playClip`, SFX concat + tests.
 3. `say.mood/look` in protocol doc, bridge, firmware (+ simulator).
 4. Gemini voice design → audition → generate 50 → listen → commit (needs key).
-5. Docs: replace `docs/chatter-design.md` content with v3 behavior; README voice/SFX workflow.
+5. Docs: replace `docs/archive/chatter-design.md` content with v3 behavior; README voice/SFX workflow.
 
 ## Risks
 - Gemini key missing → runtime ships with zero voice clips = chatter silent until step 4. Acceptable; tests use fixture PCM.
