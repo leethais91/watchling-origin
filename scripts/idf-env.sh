@@ -1,6 +1,11 @@
-# Source this file (do not execute): `. scripts/idf-env.sh`
-# Loads ESP-IDF v5.5 with its Python 3.12 venv. The system python3 (3.15) is too new
-# for ESP-IDF v5.5, so export.sh must not pick it up.
-export PATH="/opt/homebrew/opt/python@3.12/libexec/bin:$PATH"
-export IDF_PYTHON_ENV_PATH="$HOME/.espressif/python_env/idf5.5_py3.12_env"
-. "$HOME/esp/esp-idf/export.sh"
+# Source this file from bash or zsh: `. scripts/idf-env.sh`
+# Install ESP-IDF v5.5 first; its export script selects the managed Python env.
+# Set IDF_PATH before sourcing to use a non-default installation.
+if [ -z "${IDF_PATH:-}" ]; then
+  export IDF_PATH="$HOME/esp/esp-idf"
+fi
+if [ ! -f "$IDF_PATH/export.sh" ]; then
+  printf '%s\n' "ESP-IDF export.sh not found at $IDF_PATH/export.sh. Install ESP-IDF v5.5 or set IDF_PATH." >&2
+  return 1 2>/dev/null || exit 1
+fi
+. "$IDF_PATH/export.sh"

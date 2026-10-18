@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 20 px
  * Bpp: 4
- * Opts: --no-compress --font Montserrat-Bold.ttf --size 20 --bpp 4 --format lvgl --lv-include lvgl.h --symbols 0123456789%- -o /Users/thaile/PROJECTS/THAILE/voicat-monitor-agent/echoear-firmware/main/assets/font_dash_bold_20.c
+ * Opts: --no-compress --font Montserrat-Bold.ttf --size 20 --bpp 4 --format lvgl --lv-include lvgl.h --symbols 0123456789%- -o main/assets/font_dash_bold_20.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE

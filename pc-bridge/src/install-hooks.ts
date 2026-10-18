@@ -2,7 +2,7 @@
  * Adds (or removes) the Watchling hooks and statusline wrapper in ~/.claude/settings.json,
  * or with --codex the session-start and permission hooks in ~/.codex/hooks.json (same
  * hooks format). Install also writes the on-demand launchd agent that the SessionStart hooks
- * start, pinned to the Node running this installer; uninstall (Claude) removes it.
+ * start, pinned to the Node running this installer; uninstall removes it once neither integration needs it.
  *
  *   node dist/install-hooks.js install [--codex]     back up the file, add hooks (Claude: wrap statusLine)
  *   node dist/install-hooks.js uninstall [--codex]   remove hooks (Claude: restore the original statusLine)
@@ -38,9 +38,14 @@ interface HookCommand {
   command: string;
   timeout?: number;
 }
+interface HookEntry {
+  type: string;
+  command?: string;
+  prompt?: string;
+}
 interface HookMatcher {
   matcher?: string;
-  hooks: HookCommand[];
+  hooks: HookEntry[];
 }
 interface Settings {
   hooks?: Record<string, HookMatcher[]>;
@@ -69,7 +74,56 @@ const CODEX_HOOKS: Record<string, HookMatcher> = {
   PermissionRequest: { hooks: [hookCommand("permission codex", PERMISSION_HOOK_TIMEOUT_S)] },
 };
 
-const isOurs = (hook: HookCommand) => hook.command.includes(HOOK_SCRIPT);
+// Only exact script tokens from this checkout establish ownership. Similar paths
+// in other repositories must remain untouched, including after a checkout moves.
+const isWatchlingScript = (command: string, name: string): boolean => {
+  const path = join(DIST_DIR, `${name}.js`);
+  const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const unquoted = /[\s"']/.test(path) ? "(?!)" : escaped;
+  return new RegExp(`(?:^|\\s)(?:"${escaped}"|'${escaped}'|${unquoted})(?=\\s|$)`).test(command);
+};
+const isOurs = (hook: HookEntry) => hook.type === "command" && typeof hook.command === "string" && isWatchlingScript(hook.command, "hook");
+const isOurStatusline = (settings: Settings) =>
+  typeof settings.statusLine?.command === "string" && isWatchlingScript(settings.statusLine.command, "statusline");
+
+/** Reject malformed hook documents before modifying them or deciding to stop a shared service. */
+function parseSettings(text: string): Settings {
+  const value: unknown = JSON.parse(text);
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected a settings object");
+  const settings = value as Settings;
+  if (settings.statusLine !== undefined) {
+    const statusLine = settings.statusLine;
+    if (!statusLine || typeof statusLine !== "object" || Array.isArray(statusLine) ||
+      statusLine.type !== "command" || typeof statusLine.command !== "string") {
+      throw new Error("Invalid statusLine command");
+    }
+  }
+  if (settings.hooks !== undefined) {
+    if (!settings.hooks || typeof settings.hooks !== "object" || Array.isArray(settings.hooks)) throw new Error("Invalid hooks object");
+    for (const matchers of Object.values(settings.hooks)) {
+      if (!Array.isArray(matchers) || matchers.some((m) =>
+        !m || !Array.isArray(m.hooks) || m.hooks.some((h: HookEntry) =>
+          !h || typeof h !== "object" || Array.isArray(h) || typeof h.type !== "string" ||
+          (h.type === "command" && typeof h.command !== "string") ||
+          ((h.type === "prompt" || h.type === "agent") && typeof h.prompt !== "string")))) {
+        throw new Error("Invalid hook matchers");
+      }
+    }
+  }
+  return settings;
+}
+
+async function otherIntegrationNeedsAgent(path: string): Promise<boolean> {
+  try {
+    const other = parseSettings(await readFile(path, "utf8"));
+    return Object.values(other.hooks ?? {}).some((matchers) => matchers.some((m) => m.hooks.some(isOurs))) || isOurStatusline(other);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    // Unknown state must never stop a potentially active integration.
+    console.warn(`Could not inspect ${path}; keeping the shared bridge launch agent.`);
+    return true;
+  }
+}
 
 function removeOurHooks(settings: Settings): void {
   for (const [event, matchers] of Object.entries(settings.hooks ?? {})) {
@@ -117,37 +171,42 @@ function addOurHooks(settings: Settings, hooks: Record<string, HookMatcher>): vo
 async function install(settings: Settings): Promise<void> {
   addOurHooks(settings, WATCHLING_HOOKS);
 
-  if (settings.statusLine?.command !== STATUSLINE_COMMAND) {
+  if (!isOurStatusline(settings)) {
     const config: WatchlingConfig = { ...(await readConfig()), statuslineCommand: settings.statusLine?.command };
     await mkdir(WATCHLING_DIR, { recursive: true, mode: 0o700 });
     await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2) + "\n");
-    settings.statusLine = { ...settings.statusLine, type: "command", command: STATUSLINE_COMMAND };
   }
+  settings.statusLine = { ...settings.statusLine, type: "command", command: STATUSLINE_COMMAND };
 }
 
 async function uninstall(settings: Settings): Promise<void> {
   removeOurHooks(settings);
-  if (settings.statusLine?.command === STATUSLINE_COMMAND) {
+  if (isOurStatusline(settings)) {
     const original = (await readConfig()).statuslineCommand;
-    if (original) settings.statusLine.command = original;
+    if (original) settings.statusLine!.command = original;
     else delete settings.statusLine;
   }
 }
 
-const [action, flag] = process.argv.slice(2);
-if ((action !== "install" && action !== "uninstall") || (flag !== undefined && flag !== "--codex")) {
+if (process.platform !== "darwin") {
+  console.error("Watchling hook installation requires macOS (launchd). No configuration was changed.");
+  process.exit(1);
+}
+
+const [action, flag, ...extra] = process.argv.slice(2);
+if ((action !== "install" && action !== "uninstall") || (flag !== undefined && flag !== "--codex") || extra.length > 0) {
   console.error("usage: install-hooks.js <install|uninstall> [--codex]");
   process.exit(1);
 }
 const codex = flag === "--codex";
 const path = codex ? CODEX_HOOKS_PATH : SETTINGS_PATH;
 
-// Codex has no hooks.json until something adds one; Claude Code always has settings.json.
+// Both integrations may be absent on a new machine or already removed.
 const existing = await readFile(path, "utf8").catch((err: NodeJS.ErrnoException) => {
-  if (codex && err.code === "ENOENT") return null;
+  if (err.code === "ENOENT") return null;
   throw err;
 });
-const settings = (existing ? JSON.parse(existing) : {}) as Settings;
+const settings = existing ? parseSettings(existing) : {};
 const backupPath = existing ? `${path}.watchling-backup-${Date.now()}` : null;
 if (backupPath) await copyFile(path, backupPath);
 
@@ -157,11 +216,13 @@ if (codex) {
 } else {
   await (action === "install" ? install(settings) : uninstall(settings));
 }
-// Codex uninstall keeps the agent: it does nothing unless a remaining hook starts it.
+// Persist removal before stopping the service. Missing uninstall targets stay absent.
+if (existing !== null || action === "install") {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, JSON.stringify(settings, null, 2) + "\n");
+}
 if (action === "install") await installLaunchAgent();
-else if (!codex) await uninstallLaunchAgent();
-await mkdir(dirname(path), { recursive: true });
-await writeFile(path, JSON.stringify(settings, null, 2) + "\n");
+else if (!(await otherIntegrationNeedsAgent(codex ? SETTINGS_PATH : CODEX_HOOKS_PATH))) await uninstallLaunchAgent();
 
 console.log(`${action === "install" ? "Installed" : "Removed"} Watchling hooks in ${path}`);
 if (backupPath) console.log(`Backup: ${backupPath}`);
