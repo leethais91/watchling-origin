@@ -39,6 +39,9 @@ void robot_face_set_base(robot_mood_t mood);
 /* Shows a reaction for `hold_ms` (0 = until the next reaction or base change), then the base. */
 void robot_face_react(robot_mood_t mood, robot_look_t look, uint32_t hold_ms);
 
+/* A reaction is showing instead of the base mood. */
+bool robot_face_is_reacting(void);
+
 /*
  * Fullscreen: drops the helmet and draws the eyes 3x larger, centred on the parent, so the
  * round glass itself becomes the visor. Off puts the head back where it was created.

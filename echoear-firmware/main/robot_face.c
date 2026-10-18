@@ -101,6 +101,8 @@ static lv_point_precise_t s_squint_points[2][3];
 
 static robot_mood_t s_base;
 static robot_mood_t s_mood;
+/* Set by robot_face_react(), cleared once the base mood is back. */
+static bool s_reacting;
 static int32_t s_gaze;   /* px, positive = looking right */
 static int32_t s_closed; /* lid closure 0..100 while blinking */
 static int32_t s_scale = 1;
@@ -405,6 +407,7 @@ static void mood_apply(robot_mood_t mood, robot_look_t look)
 static void react_timer_cb(lv_timer_t *timer)
 {
     lv_timer_pause(timer);
+    s_reacting = false;
     mood_apply(s_base, ROBOT_LOOK_CENTER);
 }
 
@@ -466,6 +469,7 @@ void robot_face_set_base(robot_mood_t mood)
         return;
     }
     s_base = mood;
+    s_reacting = false;
     lv_timer_pause(s_react_timer);
     mood_apply(mood, ROBOT_LOOK_CENTER);
 }
@@ -473,12 +477,18 @@ void robot_face_set_base(robot_mood_t mood)
 void robot_face_react(robot_mood_t mood, robot_look_t look, uint32_t hold_ms)
 {
     lv_timer_pause(s_react_timer);
+    s_reacting = true;
     mood_apply(mood, look);
     if (hold_ms > 0) {
         lv_timer_set_period(s_react_timer, hold_ms);
         lv_timer_reset(s_react_timer);
         lv_timer_resume(s_react_timer);
     }
+}
+
+bool robot_face_is_reacting(void)
+{
+    return s_reacting;
 }
 
 void robot_face_set_fullscreen(bool on)

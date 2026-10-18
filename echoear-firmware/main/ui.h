@@ -67,3 +67,21 @@ void ui_cancel_confirm(uint32_t id);
 void ui_show_speech_face(const char *mood, const char *look, uint32_t hold_ms);
 /* Bluetooth pairing started (show `passkey` for the user to type on the host) or ended. */
 void ui_show_pairing(bool active, uint32_t passkey);
+
+/* Physical interaction picked up by the accelerometer. */
+typedef enum {
+    UI_BODY_MOVED,        /* picked up or bumped: startled */
+    UI_BODY_TILT_LEFT,    /* leaning: an idle robot glances downhill */
+    UI_BODY_TILT_RIGHT,
+} ui_body_event_t;
+void ui_body_event(ui_body_event_t event);
+
+/* Quiet mode (lying on its face: no chimes, no speech) turned on or off: says so in the status line. */
+void ui_set_quiet(bool quiet);
+
+/*
+ * Called in the LVGL task whenever the robot starts or stops needing the user: a permission
+ * request on screen, or an agent waiting for input that nobody has touched the robot since.
+ */
+typedef void (*ui_needs_user_cb_t)(bool needs_user);
+void ui_set_needs_user_cb(ui_needs_user_cb_t cb);
