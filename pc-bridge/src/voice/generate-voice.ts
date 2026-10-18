@@ -145,7 +145,7 @@ async function design(): Promise<void> {
         voice: {
           model: MODEL,
           type: "prompted",
-          display_name: `echoear-${candidate.name}`,
+          display_name: `watchling-${candidate.name}`,
           gender: "female",
           language_code: "en-US",
           prompted: { input: candidate.prompt },

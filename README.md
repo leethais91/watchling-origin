@@ -1,7 +1,7 @@
-# EchoEar Agent Client
+# Watchling
 
-Desk display for Claude Code and Codex on the **ESP-VoCat V1.2** (formerly EchoEar):
-usage arcs, task notifications and Approve/Deny for Claude Code permission requests.
+A tiny desk robot that watches your AI coding agents. Runs on the **ESP-VoCat V1.2** (formerly
+EchoEar) board: usage arcs, task notifications and Approve/Deny for Claude Code permission requests.
 
 | Path | What |
 |---|---|
@@ -113,36 +113,36 @@ How it behaves:
 
 - The bridge starts on its own when a Claude Code or Codex session starts (`SessionStart` hook)
   and keeps running after the session ends. It runs as an on-demand launchd agent
-  (`~/Library/LaunchAgents/com.echoear.bridge.plist`, not started at login, not restarted after
-  `bridge:stop`) and logs to `~/.echoear/bridge.log`. launchd, not a child of the hook, because
+  (`~/Library/LaunchAgents/com.watchling.bridge.plist`, not started at login, not restarted after
+  `bridge:stop`) and logs to `~/.watchling/bridge.log`. launchd, not a child of the hook, because
   macOS kills a process started by Claude Code as soon as it touches Bluetooth. It does not see
-  your shell's environment: set `ECHOEAR_*` variables with `launchctl setenv`, or use `npm start`.
+  your shell's environment: set `WATCHLING_*` variables with `launchctl setenv`, or use `npm start`.
   Re-run `npm run hooks:install` after switching Node versions or moving the repo.
 - Permission requests appear on the device only while the bridge runs and the device answers
   pings. Otherwise Claude Code shows its normal terminal prompt immediately.
 - While a request is on the device, the Claude Code terminal waits (spinner). Unanswered
-  requests fall back to the terminal after `ECHOEAR_CONFIRM_TIMEOUT_S` (default 120).
+  requests fall back to the terminal after `WATCHLING_CONFIRM_TIMEOUT_S` (default 120).
 - Bluetooth: the bridge also connects over BLE and uses it when the USB cable is out (battery).
   First time, the device shows a 6-digit code and macOS asks for it; after that it reconnects on
   its own. macOS may ask to allow Bluetooth (for the terminal app with `npm start`). Speech is
-  USB-only (chimes still play over BLE). `ECHOEAR_BLE=off` keeps the bridge on USB only.
+  USB-only (chimes still play over BLE). `WATCHLING_BLE=off` keeps the bridge on USB only.
 - Claude usage and today's cost come from the statusline, which only runs in terminal Claude Code
-  sessions (not the desktop app). The last values are kept in `~/.echoear/usage.json`, so they
+  sessions (not the desktop app). The last values are kept in `~/.watchling/usage.json`, so they
   survive bridge restarts; windows past their reset show 0%, and the cost starts over each day.
 - Codex usage, working and "done" events come from `~/.codex/sessions` with no Codex config.
   Approve/Deny for Codex needs `npm run hooks:install:codex` (Codex hooks, 0.162+); Codex asks you
   to trust the new hook once. The modal is titled with the agent that asks.
 - Sound: the device chimes on permission requests, finished tasks, idle waits and errors, and reads
   permission requests and finished tasks aloud. Speech is made on the Mac with `say`:
-  `ECHOEAR_TTS=off` mutes it (chimes stay). By default it uses the macOS system voice (System
+  `WATCHLING_TTS=off` mutes it (chimes stay). By default it uses the macOS system voice (System
   Settings → Accessibility → Spoken Content), which is the only way to get Siri voices; set
-  `ECHOEAR_TTS_VOICE=Samantha` to force a voice listed by `say -v '?'`.
+  `WATCHLING_TTS_VOICE=Samantha` to force a voice listed by `say -v '?'`.
 - Chatter: when no agent has done anything for 5–10 minutes, the robot says a silly Vietnamese line
   (time of day, quota nearly gone, big spend, or just bored), at most 3 times per quiet spell and
-  never while an agent works. Voice `ECHOEAR_CHATTER_VOICE` (default `Linh`, which macOS ships;
-  if it is missing, `say` silently uses its default voice); `ECHOEAR_CHATTER=off` turns it off. It
-  is also off whenever `ECHOEAR_TTS=off`, and USB-only like all speech. Each line is logged as
-  `chatter: ...` in the bridge log; `ECHOEAR_CHATTER_DELAY_S=30` shortens the wait for trying it out.
+  never while an agent works. Voice `WATCHLING_CHATTER_VOICE` (default `Linh`, which macOS ships;
+  if it is missing, `say` silently uses its default voice); `WATCHLING_CHATTER=off` turns it off. It
+  is also off whenever `WATCHLING_TTS=off`, and USB-only like all speech. Each line is logged as
+  `chatter: ...` in the bridge log; `WATCHLING_CHATTER_DELAY_S=30` shortens the wait for trying it out.
   Character, line catalog and how to add lines: [docs/chatter-design.md](docs/chatter-design.md).
 
 Wire format and message types: [docs/device-protocol.md](docs/device-protocol.md).

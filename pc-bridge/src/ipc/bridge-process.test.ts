@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { isBridgeRunning, launchAgentPlist } from "./bridge-process.js";
 
-const dir = await mkdtemp(join(tmpdir(), "echoear-bridge-"));
+const dir = await mkdtemp(join(tmpdir(), "watchling-bridge-"));
 after(() => rm(dir, { recursive: true, force: true }));
 
 test("reports no bridge when nothing listens on the socket", async () => {
@@ -30,9 +30,9 @@ test("the launch agent runs one Node script on demand only", () => {
     nodePath: "/opt/node 22/bin/node",
     script: "/repo/pc-bridge/out/bridge.js",
     cwd: "/repo/pc-bridge",
-    logPath: "/Users/me/.echoear/bridge.log",
+    logPath: "/Users/me/.watchling/bridge.log",
   });
-  assert.match(plist, /<key>Label<\/key><string>com\.echoear\.bridge<\/string>/);
+  assert.match(plist, /<key>Label<\/key><string>com\.watchling\.bridge<\/string>/);
   assert.ok(
     plist.includes("<array><string>/opt/node 22/bin/node</string><string>/repo/pc-bridge/out/bridge.js</string></array>"),
   );

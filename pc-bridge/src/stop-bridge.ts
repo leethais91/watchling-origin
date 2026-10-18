@@ -22,5 +22,5 @@ for (let waited = 0; waited < STOP_TIMEOUT_MS; waited += POLL_MS) {
   }
   await sleep(POLL_MS);
 }
-console.error("bridge did not stop; check ~/.echoear/bridge.log");
+console.error("bridge did not stop; check ~/.watchling/bridge.log");
 process.exit(1);

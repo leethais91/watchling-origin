@@ -14,7 +14,7 @@
 
 static const char *TAG = "ble_link";
 
-#define DEVICE_NAME          "EchoEar"
+#define DEVICE_NAME          "Watchling"
 #define PASSKEY_MODULO       1000000
 #define NOTIFY_RETRY_MS      10
 #define NOTIFY_RETRIES       50 /* ~0.5 s of "out of buffers" before a send gives up */

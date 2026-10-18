@@ -1,5 +1,5 @@
 /**
- * Adds (or removes) the EchoEar hooks and statusline wrapper in ~/.claude/settings.json,
+ * Adds (or removes) the Watchling hooks and statusline wrapper in ~/.claude/settings.json,
  * or with --codex the session-start and permission hooks in ~/.codex/hooks.json (same
  * hooks format). Install also writes the on-demand launchd agent that the SessionStart hooks
  * start, pinned to the Node running this installer; uninstall (Claude) removes it.
@@ -20,7 +20,7 @@ import {
   loadLaunchAgent,
   unloadLaunchAgent,
 } from "./ipc/bridge-process.js";
-import { BRIDGE_LOG_PATH, CONFIG_PATH, ECHOEAR_DIR, type EchoearConfig } from "./ipc/paths.js";
+import { BRIDGE_LOG_PATH, CONFIG_PATH, WATCHLING_DIR, type WatchlingConfig } from "./ipc/paths.js";
 
 const SETTINGS_PATH = join(homedir(), ".claude", "settings.json");
 const CODEX_HOOKS_PATH = join(homedir(), ".codex", "hooks.json");
@@ -54,7 +54,7 @@ const hookCommand = (arg: string, timeout: number): HookCommand => ({
   timeout,
 });
 
-const ECHOEAR_HOOKS: Record<string, HookMatcher> = {
+const WATCHLING_HOOKS: Record<string, HookMatcher> = {
   SessionStart: { hooks: [hookCommand("session-start", EVENT_HOOK_TIMEOUT_S)] },
   PermissionRequest: { hooks: [hookCommand("permission", PERMISSION_HOOK_TIMEOUT_S)] },
   UserPromptSubmit: { hooks: [hookCommand("prompt", EVENT_HOOK_TIMEOUT_S)] },
@@ -81,9 +81,9 @@ function removeOurHooks(settings: Settings): void {
   }
 }
 
-async function readConfig(): Promise<EchoearConfig> {
+async function readConfig(): Promise<WatchlingConfig> {
   return readFile(CONFIG_PATH, "utf8")
-    .then((text) => JSON.parse(text) as EchoearConfig)
+    .then((text) => JSON.parse(text) as WatchlingConfig)
     .catch(() => ({}));
 }
 
@@ -94,7 +94,7 @@ async function installLaunchAgent(): Promise<void> {
     cwd: dirname(DIST_DIR),
     logPath: BRIDGE_LOG_PATH,
   });
-  await mkdir(ECHOEAR_DIR, { recursive: true, mode: 0o700 });
+  await mkdir(WATCHLING_DIR, { recursive: true, mode: 0o700 });
   await mkdir(dirname(LAUNCH_AGENT_PATH), { recursive: true });
   await writeFile(LAUNCH_AGENT_PATH, plist);
   await loadLaunchAgent();
@@ -115,11 +115,11 @@ function addOurHooks(settings: Settings, hooks: Record<string, HookMatcher>): vo
 }
 
 async function install(settings: Settings): Promise<void> {
-  addOurHooks(settings, ECHOEAR_HOOKS);
+  addOurHooks(settings, WATCHLING_HOOKS);
 
   if (settings.statusLine?.command !== STATUSLINE_COMMAND) {
-    const config: EchoearConfig = { ...(await readConfig()), statuslineCommand: settings.statusLine?.command };
-    await mkdir(ECHOEAR_DIR, { recursive: true, mode: 0o700 });
+    const config: WatchlingConfig = { ...(await readConfig()), statuslineCommand: settings.statusLine?.command };
+    await mkdir(WATCHLING_DIR, { recursive: true, mode: 0o700 });
     await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2) + "\n");
     settings.statusLine = { ...settings.statusLine, type: "command", command: STATUSLINE_COMMAND };
   }
@@ -148,7 +148,7 @@ const existing = await readFile(path, "utf8").catch((err: NodeJS.ErrnoException)
   throw err;
 });
 const settings = (existing ? JSON.parse(existing) : {}) as Settings;
-const backupPath = existing ? `${path}.echoear-backup-${Date.now()}` : null;
+const backupPath = existing ? `${path}.watchling-backup-${Date.now()}` : null;
 if (backupPath) await copyFile(path, backupPath);
 
 if (codex) {
@@ -163,5 +163,5 @@ else if (!codex) await uninstallLaunchAgent();
 await mkdir(dirname(path), { recursive: true });
 await writeFile(path, JSON.stringify(settings, null, 2) + "\n");
 
-console.log(`${action === "install" ? "Installed" : "Removed"} EchoEar hooks in ${path}`);
+console.log(`${action === "install" ? "Installed" : "Removed"} Watchling hooks in ${path}`);
 if (backupPath) console.log(`Backup: ${backupPath}`);

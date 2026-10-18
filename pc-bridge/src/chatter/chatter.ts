@@ -3,8 +3,8 @@
  * every 10–20 minutes up to four, then stays quiet until an agent does something again. Never while
  * an agent works and never at night.
  *
- *   ECHOEAR_CHATTER=off            no chatter (also off whenever speech is off)
- *   ECHOEAR_CHATTER_DELAY_S=30     fixed wait instead of 10–20 minutes, for trying it out
+ *   WATCHLING_CHATTER=off            no chatter (also off whenever speech is off)
+ *   WATCHLING_CHATTER_DELAY_S=30     fixed wait instead of 10–20 minutes, for trying it out
  */
 import type { AgentSource, UsageMessage } from "../protocol/messages.js";
 import { type ChatterLine, LineSelector } from "./chatter-lines.js";

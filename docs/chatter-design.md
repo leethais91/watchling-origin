@@ -32,8 +32,8 @@ Agent activity means: a prompt starting a turn, a permission request, a done/att
 event, or Codex starting or stopping. Any of them starts a new quiet spell (count back to 0).
 Usage and clock updates don't count.
 
-Chatter is off when `ECHOEAR_CHATTER=off` or `ECHOEAR_TTS=off`. Each line is logged as
-`chatter: ...` in `~/.echoear/bridge.log`, with `(not spoken: device not on USB)` when it couldn't
+Chatter is off when `WATCHLING_CHATTER=off` or `WATCHLING_TTS=off`. Each line is logged as
+`chatter: ...` in `~/.watchling/bridge.log`, with `(not spoken: device not on USB)` when it couldn't
 be played.
 
 ## Line catalog
@@ -98,15 +98,15 @@ about 47% of the time.
 ## Trying it out
 
 ```sh
-launchctl setenv ECHOEAR_CHATTER_DELAY_S 30        # wait 30 s instead of 5–10 min
-launchctl kickstart -k gui/$(id -u)/com.echoear.bridge
-tail -f ~/.echoear/bridge.log | grep chatter
+launchctl setenv WATCHLING_CHATTER_DELAY_S 30        # wait 30 s instead of 5–10 min
+launchctl kickstart -k gui/$(id -u)/com.watchling.bridge
+tail -f ~/.watchling/bridge.log | grep chatter
 # afterwards
-launchctl unsetenv ECHOEAR_CHATTER_DELAY_S
-launchctl kickstart -k gui/$(id -u)/com.echoear.bridge
+launchctl unsetenv WATCHLING_CHATTER_DELAY_S
+launchctl kickstart -k gui/$(id -u)/com.watchling.bridge
 ```
 
-Pick another installed voice with `ECHOEAR_CHATTER_VOICE` (`say -v '?'` lists them). The lines
+Pick another installed voice with `WATCHLING_CHATTER_VOICE` (`say -v '?'` lists them). The lines
 are Vietnamese, so a non-Vietnamese voice will mispronounce them.
 
 ## Ideas not built

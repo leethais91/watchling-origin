@@ -1,8 +1,8 @@
 {
-  "name": "pc-bridge",
+  "name": "watchling-bridge",
   "version": "0.1.0",
   "private": true,
-  "description": "Bridges Claude Code / Codex events to the ESP-VoCat (EchoEar) desk display",
+  "description": "Bridges Claude Code / Codex events to Watchling, a desk robot on the ESP-VoCat (EchoEar) board",
   "type": "module",
   "engines": {
     "node": ">=22 <23"

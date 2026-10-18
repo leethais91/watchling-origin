@@ -17,7 +17,7 @@ import { SOCKET_PATH } from "./paths.js";
 
 const run = promisify(execFile);
 
-export const LAUNCH_AGENT_LABEL = "com.echoear.bridge";
+export const LAUNCH_AGENT_LABEL = "com.watchling.bridge";
 export const LAUNCH_AGENT_PATH = join(homedir(), "Library", "LaunchAgents", `${LAUNCH_AGENT_LABEL}.plist`);
 const SERVICE = `gui/${process.getuid?.() ?? 0}`;
 const SERVICE_TARGET = `${SERVICE}/${LAUNCH_AGENT_LABEL}`;

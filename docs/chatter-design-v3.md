@@ -1,4 +1,4 @@
-# ESP-VoCat Agent Companion
+# Watchling
 
 ## Idle Chatter & Voice Personality — Design Specification v3.0
 
@@ -28,7 +28,7 @@ Report: `plans/reports/brainstorm-261018-1405-chatter-v3-spec-review-report.md`.
 | History | Chỉ trong bộ nhớ, không lưu qua restart |
 | Generation | 1 bản/câu, câu chưa đạt regenerate theo id |
 | Manifest | `voiceId` + hash text mỗi id; test kiểm tra đủ wav và hash khớp |
-| Config | Chỉ `ECHOEAR_CHATTER`, `ECHOEAR_CHATTER_DELAY_S`; còn lại là constant |
+| Config | Chỉ `WATCHLING_CHATTER`, `WATCHLING_CHATTER_DELAY_S`; còn lại là constant |
 | Gentle Care cooldown | 2 giờ cho cả nhóm |
 | Random silence | Bỏ: đến lượt là nói (đổi 2026-10-18) |
 | Không phát được | Link không sẵn sàng / voice tắt: không tính lượt |
@@ -43,7 +43,7 @@ Report: `plans/reports/brainstorm-261018-1405-chatter-v3-spec-review-report.md`.
 
 ### 1.1. Ý tưởng
 
-ESP-VoCat là một robot AI nhỏ đặt trên bàn làm việc, có nhiệm vụ theo dõi hoạt động của Claude Code và Codex.
+Watchling là một robot AI nhỏ (chạy trên board ESP-VoCat) đặt trên bàn làm việc, có nhiệm vụ theo dõi hoạt động của Claude Code và Codex.
 
 Ngoài hiển thị thông tin và thông báo các sự kiện quan trọng, robot có thể chủ động nói vài câu ngắn khi không có tác vụ đang chạy.
 
@@ -819,8 +819,8 @@ MVP không yêu cầu lip-sync chính xác.
 Giữ khả năng tương thích với cấu hình hiện tại.
 
 ```env
-ECHOEAR_CHATTER=on        # off = không chatter (cũng tắt khi ECHOEAR_TTS=off)
-ECHOEAR_CHATTER_DELAY_S=  # chờ cố định N giây thay vì 10–20 phút, để thử
+WATCHLING_CHATTER=on        # off = không chatter (cũng tắt khi WATCHLING_TTS=off)
+WATCHLING_CHATTER_DELAY_S=  # chờ cố định N giây thay vì 10–20 phút, để thử
 ```
 
 Timing, quiet hours, xác suất, trọng số, history là constant trong `chatter.ts` / `chatter-lines.ts` (§5.1, §7, §10.3).

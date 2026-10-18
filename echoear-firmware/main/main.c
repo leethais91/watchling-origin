@@ -1,5 +1,5 @@
 /*
- * EchoEar (ESP-VoCat V1.2) agent display: shows Claude Code / Codex usage and lets
+ * Watchling agent display on the EchoEar (ESP-VoCat V1.2) board: shows Claude Code / Codex usage and lets
  * the user answer Claude Code / Codex permission requests by touch. Messages arrive from
  * pc-bridge over USB or BLE; see docs/device-protocol.md.
  */

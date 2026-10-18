@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { UsageStore } from "./usage-store.js";
 
-const dir = await mkdtemp(join(tmpdir(), "echoear-usage-"));
+const dir = await mkdtemp(join(tmpdir(), "watchling-usage-"));
 after(() => rm(dir, { recursive: true, force: true }));
 
 const inAnHour = Math.floor(Date.now() / 1000) + 3600;

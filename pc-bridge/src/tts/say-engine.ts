@@ -10,7 +10,7 @@ export class SayEngine implements TtsEngine {
   constructor(private readonly voice?: string) {}
 
   async synthesize(text: string): Promise<Buffer> {
-    const dir = await mkdtemp(join(tmpdir(), "echoear-tts-"));
+    const dir = await mkdtemp(join(tmpdir(), "watchling-tts-"));
     const out = join(dir, "speech.wav");
     try {
       const args = ["-o", out, `--data-format=LEI16@${SPEECH_FORMAT.sampleRate}`];

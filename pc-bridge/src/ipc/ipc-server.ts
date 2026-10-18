@@ -14,7 +14,7 @@ import type { AgentActivityMessage, AgentEventMessage, Decision } from "../proto
 import type { PermissionInput } from "../permission/permission-summary.js";
 import type { StatuslineInput } from "../usage/usage-store.js";
 import { isBridgeRunning } from "./bridge-process.js";
-import { ECHOEAR_DIR, SOCKET_PATH } from "./paths.js";
+import { WATCHLING_DIR, SOCKET_PATH } from "./paths.js";
 
 /** Write tool payloads carry whole files; allow generous bodies. */
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
@@ -32,7 +32,7 @@ export interface IpcHandlers {
 }
 
 export async function startIpcServer(handlers: IpcHandlers): Promise<Server> {
-  await mkdir(ECHOEAR_DIR, { recursive: true, mode: 0o700 });
+  await mkdir(WATCHLING_DIR, { recursive: true, mode: 0o700 });
   const server = createServer(async (req, res) => {
     let body: unknown;
     try {

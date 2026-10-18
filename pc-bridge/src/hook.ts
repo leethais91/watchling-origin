@@ -67,7 +67,7 @@ async function handlePermission(hookInput: HookInput): Promise<void> {
   const decision =
     response.decision === "approve"
       ? { behavior: "allow" }
-      : { behavior: "deny", message: "Denied from the EchoEar desk display." };
+      : { behavior: "deny", message: "Denied from the Watchling desk robot." };
   process.stdout.write(
     JSON.stringify({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision } }),
   );

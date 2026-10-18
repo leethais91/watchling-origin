@@ -1,13 +1,13 @@
 /**
  * Bridge daemon: connects Claude Code hooks/statusline (IPC socket) and Codex session
- * files to the EchoEar device over USB, or BLE when the cable is out. Started by the
+ * files to the Watchling device over USB, or BLE when the cable is out. Started by the
  * SessionStart hook through launchd (see ipc/bridge-process.ts) or by hand (`npm start`).
  *
- *   ECHOEAR_PORT=/dev/cu.usbmodemXXXX  skip auto-detection
- *   ECHOEAR_BLE=off                    USB only (no Bluetooth permission needed)
- *   ECHOEAR_CONFIRM_TIMEOUT_S=120      how long a request waits on the device
- *   ECHOEAR_TTS / ECHOEAR_TTS_VOICE    spoken announcements, see tts/tts-engine.ts
- *   ECHOEAR_CHATTER / ECHOEAR_CHATTER_DELAY_S  idle chatter, see chatter/chatter.ts
+ *   WATCHLING_PORT=/dev/cu.usbmodemXXXX  skip auto-detection
+ *   WATCHLING_BLE=off                    USB only (no Bluetooth permission needed)
+ *   WATCHLING_CONFIRM_TIMEOUT_S=120      how long a request waits on the device
+ *   WATCHLING_TTS / WATCHLING_TTS_VOICE    spoken announcements, see tts/tts-engine.ts
+ *   WATCHLING_CHATTER / WATCHLING_CHATTER_DELAY_S  idle chatter, see chatter/chatter.ts
  */
 import { Chatter } from "./chatter/chatter.js";
 import { ChatterClips } from "./chatter/chatter-clips.js";
@@ -27,7 +27,7 @@ import { createTtsEngine } from "./tts/tts-engine.js";
 import { startCodexSessionWatcher } from "./usage/codex-session-watcher.js";
 import { UsageStore } from "./usage/usage-store.js";
 
-const CONFIRM_TIMEOUT_MS = Number(process.env.ECHOEAR_CONFIRM_TIMEOUT_S ?? 120) * 1000;
+const CONFIRM_TIMEOUT_MS = Number(process.env.WATCHLING_CONFIRM_TIMEOUT_S ?? 120) * 1000;
 /** Coalesces bursts of statusline/Codex updates into one usage frame. */
 const USAGE_THROTTLE_MS = 1000;
 const MAX_EVENT_TEXT_CHARS = 200;
@@ -36,9 +36,9 @@ const CLOCK_RESYNC_MS = 10 * 60 * 1000;
 
 const log = (...args: unknown[]) => console.log(new Date().toLocaleTimeString(), ...args);
 
-const usb = new SerialTransport(process.env.ECHOEAR_PORT);
+const usb = new SerialTransport(process.env.WATCHLING_PORT);
 const links: { name: string; link: DeviceLink }[] = [{ name: "USB", link: usb }];
-if (process.env.ECHOEAR_BLE !== "off") links.push({ name: "BLE", link: new BleTransport() });
+if (process.env.WATCHLING_BLE !== "off") links.push({ name: "BLE", link: new BleTransport() });
 const transport = new TransportHub(links);
 const usage = new UsageStore(USAGE_STATE_PATH);
 await usage.restore();
@@ -54,8 +54,8 @@ const speechLink = {
   sendAudio: (payload: Uint8Array) => transport.sendAudio(payload),
 };
 const speaker = tts && new Speaker(tts, speechLink, (err) => log(`speech failed: ${err.message}`));
-const chatterDelayMs = Number(process.env.ECHOEAR_CHATTER_DELAY_S) * 1000;
-const chatterClips = speaker && process.env.ECHOEAR_CHATTER !== "off" ? await ChatterClips.load() : null;
+const chatterDelayMs = Number(process.env.WATCHLING_CHATTER_DELAY_S) * 1000;
+const chatterClips = speaker && process.env.WATCHLING_CHATTER !== "off" ? await ChatterClips.load() : null;
 for (const problem of chatterClips?.problems ?? []) log(`chatter clip skipped: ${problem}`);
 const chatter =
   speaker && chatterClips

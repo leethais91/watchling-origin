@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { postToBridge, readStdin } from "./ipc/ipc-client.js";
-import { CONFIG_PATH, type EchoearConfig } from "./ipc/paths.js";
+import { CONFIG_PATH, type WatchlingConfig } from "./ipc/paths.js";
 
 /** Claude Code cancels slow statuslines; never let the bridge delay it noticeably. */
 const FORWARD_TIMEOUT_MS = 300;
@@ -21,8 +21,8 @@ try {
 }
 
 const config = await readFile(CONFIG_PATH, "utf8")
-  .then((text) => JSON.parse(text) as EchoearConfig)
-  .catch((): EchoearConfig => ({}));
+  .then((text) => JSON.parse(text) as WatchlingConfig)
+  .catch((): WatchlingConfig => ({}));
 
 const forwarded = parsed ? postToBridge("/statusline", parsed, FORWARD_TIMEOUT_MS) : Promise.resolve(null);
 

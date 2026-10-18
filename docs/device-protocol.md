@@ -1,10 +1,10 @@
-# Device protocol (pc-bridge ⇄ EchoEar firmware)
+# Device protocol (pc-bridge ⇄ Watchling firmware)
 
 Transports, both carrying the same framed byte stream:
 
 - **USB:** ESP32-S3 built-in USB-Serial-JTAG (`/dev/cu.usbmodem*`, VID `303a`). ESP log text shares
   the port with protocol frames.
-- **BLE:** Nordic UART Service `6E400001-B5A3-F393-E0A9-E50E24DCCA9E`, device name `EchoEar`.
+- **BLE:** Nordic UART Service `6E400001-B5A3-F393-E0A9-E50E24DCCA9E`, device name `Watchling`.
   RX `…0002` (bridge writes, with response, in ≤ 180-byte chunks), TX `…0003` (device notifies,
   MTU-sized chunks). RX needs an encrypted, MITM-authenticated link: LESC passkey pairing,
   the device shows the 6-digit code, bonds persist in NVS. Unauthenticated links are dropped.
@@ -62,7 +62,7 @@ Field `t` is the message type. Percentages are integers 0–100 or `null` when u
 
 - One request on screen at a time; others queue. Only the active `id` can be answered.
 - `touch` may approve or deny. `voice` may approve only `risk: low`, deny always. `tap` may only deny.
-- Unanswered after `ECHOEAR_CONFIRM_TIMEOUT_S` (default 120 s), device unplugged, or hook process
+- Unanswered after `WATCHLING_CONFIRM_TIMEOUT_S` (default 120 s), device unplugged, or hook process
   gone → request resolves with no decision and Claude Code shows its own terminal prompt.
 - Codex runs the same PermissionRequest hook (`~/.codex/hooks.json`). Its shell tool is also `Bash`;
   file edits arrive as `apply_patch` (summary lists `add|update|delete <path>`, any delete = high).
