@@ -297,13 +297,17 @@ void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe)
     bsp_display_lock(0);
     lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
     agent_dashboard_create(lv_screen_active());
-    /* Start from the mock values for usage/cost/status, but show nothing the device cannot know. */
-    agent_dashboard_mock_data(&s_dash);
-    s_dash.time_text[0] = '\0';
-    s_dash.date_text[0] = '\0';
-    s_dash.wifi_connected = false;
-    s_dash.ble_connected = false;
-    s_dash.battery_percent = -1;
+    /* Nothing is known until the bridge links and syncs: usage, cost and battery show "--". */
+    s_dash = (agent_dashboard_data_t){
+        .claude_usage_percent = -1,
+        .codex_usage_percent = -1,
+        .claude_weekly_percent = -1,
+        .codex_weekly_percent = -1,
+        .daily_cost = -1,
+        .battery_percent = -1,
+        .status_text = "Waiting for connection...",
+        .status_tone = AGENT_DASHBOARD_TONE_NEUTRAL,
+    };
     agent_dashboard_update(&s_dash);
     robot_base_update();
     modal_create();
