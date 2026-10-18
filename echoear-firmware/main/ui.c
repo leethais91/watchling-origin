@@ -56,6 +56,8 @@
 #define FACE_IDLE_MS      (30 * 1000)
 #define DOZE_IDLE_MS      (5 * 60 * 1000)
 #define SURPRISED_MS      1200
+#define TILT_GLANCE_MS    3000
+#define QUIET_REACT_MS    1500
 
 enum { AGENT_CLAUDE, AGENT_CODEX, AGENT_COUNT };
 
@@ -76,6 +78,11 @@ static bool s_bridge_linked;
 static uint32_t s_last_activity;
 static bool s_face_mode;
 
+/* lv_tick of an attention event nobody has answered by touch yet; 0 = none. */
+static uint32_t s_attention_since;
+static bool s_needs_user;
+static ui_needs_user_cb_t s_on_needs_user;
+
 /* Touch-down y of a pull that started at the top edge; -1 while the touch is a plain poke. */
 static int32_t s_pull_start_y = -1;
 
@@ -90,6 +97,29 @@ static uint32_t s_modal_id;
 static bool s_modal_visible;
 
 static void robot_base_update(void);
+
+/* ---------- needs-user signal ---------- */
+
+static void needs_user_update(void)
+{
+    if (s_attention_since != 0 && lv_tick_elaps(s_attention_since) >= ATTENTION_MS) {
+        s_attention_since = 0;
+    }
+    bool needs = s_modal_visible || s_attention_since != 0;
+    if (needs != s_needs_user) {
+        s_needs_user = needs;
+        if (s_on_needs_user != NULL) {
+            s_on_needs_user(needs);
+        }
+    }
+}
+
+/* The user touched the robot, so a pending "waiting for input" has been seen. */
+static void attention_seen(void)
+{
+    s_attention_since = 0;
+    needs_user_update();
+}
 
 /* ---------- face mode ---------- */
 
@@ -124,6 +154,7 @@ static void touch_cb(lv_event_t *e)
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_PRESSED) {
         activity_note();
+        attention_seen();
         int32_t y = touch_y();
         if (y < SETTINGS_PULL_EDGE_PX) {
             s_pull_start_y = y;
@@ -170,6 +201,7 @@ static void modal_hide(void)
     s_modal_visible = false;
     lv_anim_delete(s_modal, NULL);
     lv_obj_set_hidden(s_modal, true);
+    needs_user_update();
 }
 
 static void ring_opa_anim_cb(void *obj, int32_t value)
@@ -278,6 +310,7 @@ static void modal_show(uint32_t id, const lv_image_dsc_t *agent_logo, const char
 
     lv_obj_set_hidden(s_modal, false);
     s_modal_visible = true;
+    needs_user_update();
 }
 
 /* ---------- Bluetooth pairing ---------- */
@@ -354,7 +387,7 @@ static int agent_index(const char *source)
  * Base mood: asleep without the bridge, scanning while any agent works, dozing after a
  * long quiet spell, idle otherwise.
  */
-static void robot_base_update(void)
+static robot_mood_t robot_base_mood(void)
 {
     bool busy = false;
     for (int i = 0; i < AGENT_COUNT; i++) {
@@ -364,10 +397,15 @@ static void robot_base_update(void)
         busy |= s_busy_since[i] != 0;
     }
     bool dozing = lv_tick_elaps(s_last_activity) >= DOZE_IDLE_MS;
-    robot_face_set_base(!s_bridge_linked ? ROBOT_MOOD_SLEEP
-                        : busy           ? ROBOT_MOOD_BUSY
-                        : dozing         ? ROBOT_MOOD_SLEEP
-                                         : ROBOT_MOOD_IDLE);
+    return !s_bridge_linked ? ROBOT_MOOD_SLEEP
+           : busy           ? ROBOT_MOOD_BUSY
+           : dozing         ? ROBOT_MOOD_SLEEP
+                            : ROBOT_MOOD_IDLE;
+}
+
+static void robot_base_update(void)
+{
+    robot_face_set_base(robot_base_mood());
 }
 
 /* Runs every second in the LVGL task; the dashboard only redraws what changed. */
@@ -383,6 +421,7 @@ static void status_timer_cb(lv_timer_t *timer)
     }
     agent_dashboard_update(&s_dash);
     robot_base_update();
+    needs_user_update();
     if (!linked && s_modal_visible) {
         modal_hide(); /* the bridge releases the request to the terminal on its side */
     }
@@ -484,6 +523,8 @@ void ui_show_event(const char *source, ui_event_kind_t kind, const char *text)
     /* Every event ends that agent's turn. Claude's arc is on the left, Codex's on the right. */
     s_busy_since[agent] = 0;
     activity_note();
+    s_attention_since = kind == UI_EVENT_ATTENTION ? LV_MAX(lv_tick_get(), 1) : 0;
+    needs_user_update();
     robot_base_update();
     robot_face_react(reactions[kind].mood, agent == AGENT_CODEX ? ROBOT_LOOK_RIGHT : ROBOT_LOOK_LEFT,
                      reactions[kind].hold_ms);
@@ -498,6 +539,8 @@ void ui_set_activity(const char *source, bool busy)
     activity_note();
     robot_base_update();
     if (busy) {
+        s_attention_since = 0; /* the agent got its input */
+        needs_user_update();
         /* A new turn replaces any reaction still showing (the base may already be busy). */
         robot_face_react(ROBOT_MOOD_BUSY, ROBOT_LOOK_CENTER, 0);
     }
@@ -557,5 +600,45 @@ void ui_show_pairing(bool active, uint32_t passkey)
         activity_note();
     }
     lv_obj_set_hidden(s_pairing, !active);
+    bsp_display_unlock();
+}
+
+void ui_body_event(ui_body_event_t event)
+{
+    bsp_display_lock(0);
+    activity_note();
+    robot_base_update(); /* wakes a dozing robot first; a base change ends any reaction */
+    switch (event) {
+    case UI_BODY_MOVED:
+        robot_face_react(ROBOT_MOOD_SURPRISED, ROBOT_LOOK_CENTER, SURPRISED_MS);
+        break;
+    case UI_BODY_TILT_LEFT:
+    case UI_BODY_TILT_RIGHT:
+        /* Only a free idle robot glances: an agent's reaction or the busy scan wins. */
+        if (robot_base_mood() == ROBOT_MOOD_IDLE && !robot_face_is_reacting()) {
+            robot_face_react(ROBOT_MOOD_IDLE, event == UI_BODY_TILT_LEFT ? ROBOT_LOOK_LEFT : ROBOT_LOOK_RIGHT,
+                             TILT_GLANCE_MS);
+        }
+        break;
+    }
+    bsp_display_unlock();
+}
+
+void ui_set_quiet(bool quiet)
+{
+    bsp_display_lock(0);
+    snprintf(s_dash.status_text, sizeof(s_dash.status_text), "%s", quiet ? "Quiet mode" : "Sound on");
+    s_dash.status_tone = AGENT_DASHBOARD_TONE_NEUTRAL;
+    agent_dashboard_update(&s_dash);
+    activity_note();
+    robot_base_update();
+    robot_face_react(quiet ? ROBOT_MOOD_SLEEP : ROBOT_MOOD_HAPPY, ROBOT_LOOK_CENTER, QUIET_REACT_MS);
+    bsp_display_unlock();
+}
+
+void ui_set_needs_user_cb(ui_needs_user_cb_t cb)
+{
+    bsp_display_lock(0);
+    s_on_needs_user = cb;
     bsp_display_unlock();
 }

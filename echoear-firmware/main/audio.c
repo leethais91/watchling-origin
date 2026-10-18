@@ -39,6 +39,7 @@ static QueueHandle_t s_queue;
 static int s_volume = 60;
 /* Written from the LVGL task, read on the host link RX task. */
 static volatile bool s_speech_enabled = true;
+static volatile bool s_muted;
 static audio_speech_start_cb_t s_speech_start_cb;
 
 /* Speech clip being received (host link RX task only). */
@@ -127,9 +128,14 @@ void audio_set_speech_start_cb(audio_speech_start_cb_t cb)
     s_speech_start_cb = cb;
 }
 
+void audio_set_muted(bool muted)
+{
+    s_muted = muted;
+}
+
 void audio_play_chime(audio_chime_t chime)
 {
-    if (chime < AUDIO_CHIME_COUNT) {
+    if (chime < AUDIO_CHIME_COUNT && !s_muted) {
         const sound_effect_t *sfx = CHIME_SOUNDS[chime];
         clip_t clip = {.pcm = sfx->pcm, .samples = sfx->samples, .owned = false};
         enqueue(&clip);
@@ -140,8 +146,8 @@ void audio_speech_begin(uint16_t id, size_t bytes, uint32_t tag)
 {
     heap_caps_free(s_rx_pcm);
     s_rx_pcm = NULL;
-    if (!s_speech_enabled) {
-        return; /* voice turned off on the device; the bridge stops sending once it hears */
+    if (!s_speech_enabled || s_muted) {
+        return; /* voice off or muted on the device; the bridge stops sending once it hears */
     }
     if (bytes == 0 || bytes > SPEECH_MAX_BYTES || (bytes & 1)) {
         ESP_LOGW(TAG, "Rejected speech clip of %u bytes", (unsigned)bytes);

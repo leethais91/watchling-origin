@@ -21,7 +21,9 @@
 #include "battery.h"
 #include "ble_link.h"
 #include "host_link.h"
+#include "imu.h"
 #include "settings_store.h"
+#include "status_led.h"
 #include "ui.h"
 
 static const char *TAG = "app";
@@ -32,6 +34,12 @@ static const char *TAG = "app";
 
 /* Written in the LVGL task; the RX task only reads `voice` for the hello reply. */
 static settings_values_t s_settings;
+
+/*
+ * Quiet mode: no chimes and no speech while the robot lies on its face. Written on the
+ * esp_timer task (IMU poll); the RX and LVGL tasks only read it.
+ */
+static volatile bool s_quiet;
 
 /* esp_timer task; one short I2C transaction pair every 30 s. */
 static void battery_poll(void *arg)
@@ -79,13 +87,73 @@ static esp_err_t nvs_start(void)
     return err;
 }
 
-/* `voice` tells the bridge whether to synthesize speech at all. */
+/* Whether the bridge should synthesize speech at all: the Voice setting, unless quiet. */
+static bool voice_wanted(void)
+{
+    return s_settings.voice && !s_quiet;
+}
+
+static void send_voice(void)
+{
+    host_link_send_json(voice_wanted() ? "{\"t\":\"settings\",\"voice\":true}"
+                                       : "{\"t\":\"settings\",\"voice\":false}");
+}
+
 static void send_hello(void)
 {
     char json[128];
     snprintf(json, sizeof(json), "{\"t\":\"hello\",\"fw\":\"%s\",\"voice\":%s}",
-             esp_app_get_description()->version, s_settings.voice ? "true" : "false");
+             esp_app_get_description()->version, voice_wanted() ? "true" : "false");
     host_link_send_json(json);
+}
+
+/* esp_timer task. The bridge hears "voice off", so it stops sending speech meanwhile. */
+static void quiet_set(bool quiet)
+{
+    if (quiet == s_quiet) {
+        return;
+    }
+    s_quiet = quiet;
+    audio_set_muted(quiet);
+    send_voice();
+    ui_set_quiet(quiet);
+    ESP_LOGI(TAG, "Quiet mode %s", quiet ? "on" : "off");
+}
+
+/* esp_timer task (IMU poll). */
+static void on_imu(imu_event_t event)
+{
+    switch (event) {
+    case IMU_EVENT_FACE_DOWN:
+    case IMU_EVENT_FACE_UP:
+        quiet_set(event == IMU_EVENT_FACE_DOWN);
+        break;
+    case IMU_EVENT_MOVED:
+        ui_body_event(UI_BODY_MOVED);
+        break;
+    case IMU_EVENT_TILT_LEFT:
+        ui_body_event(UI_BODY_TILT_LEFT);
+        break;
+    case IMU_EVENT_TILT_RIGHT:
+        ui_body_event(UI_BODY_TILT_RIGHT);
+        break;
+    case IMU_EVENT_LEVEL:
+        break;
+    }
+}
+
+/* The LED and the IMU are extras: each one missing only costs its own feature. */
+static void body_sensors_start(void)
+{
+    if (status_led_init() == ESP_OK) {
+        ui_set_needs_user_cb(status_led_set_attention);
+    } else {
+        ESP_LOGW(TAG, "Status LED unavailable");
+    }
+    esp_err_t err = imu_start(on_imu);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Accelerometer unavailable (%s)", esp_err_to_name(err));
+    }
 }
 
 /* LVGL task. Brightness follows the finger; volume changes once it lifts, with a sample chime. */
@@ -104,8 +172,7 @@ static void on_settings(settings_field_t field, const settings_values_t *values,
         break;
     case SETTINGS_FIELD_VOICE:
         audio_set_speech_enabled(values->voice);
-        host_link_send_json(values->voice ? "{\"t\":\"settings\",\"voice\":true}"
-                                          : "{\"t\":\"settings\",\"voice\":false}");
+        send_voice();
         break;
     }
     if (final) {
@@ -304,6 +371,7 @@ void app_main(void)
     } else {
         ESP_LOGE(TAG, "Speaker unavailable; continuing without sound");
     }
+    body_sensors_start();
 
     ESP_ERROR_CHECK(host_link_start(on_host_message, on_host_audio));
     if (nvs_err != ESP_OK || ble_link_start(host_link_ble_rx, ui_show_pairing) != ESP_OK) {

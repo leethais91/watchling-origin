@@ -28,7 +28,10 @@ void audio_set_volume(int percent);
 /* Speech clips are dropped while disabled; chimes keep playing. Enabled at boot. */
 void audio_set_speech_enabled(bool enabled);
 
-/* Queues a chime; non-blocking, safe from any task. No-op if audio_init() failed. */
+/* Quiet mode: chimes and speech clips are both dropped while muted. Safe from any task. */
+void audio_set_muted(bool muted);
+
+/* Queues a chime; non-blocking, safe from any task. No-op if audio_init() failed or muted. */
 void audio_play_chime(audio_chime_t chime);
 
 /*
