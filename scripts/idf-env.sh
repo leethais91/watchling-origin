@@ -4,9 +4,9 @@
 #
 # ESP-IDF v5.5 supports Python 3.9-3.13 and builds its Python env with whatever `python3`
 # comes first on PATH, so a newer system Python (Homebrew's 3.14+) breaks it. This pins the
-# interpreter: WATCHLING_IDF_PYTHON (default 3.12), found with uv when available
-# (`uv python install 3.12` gets one), else `python3.12` on PATH. It runs through a
-# one-file shim directory, so nothing else from that interpreter's bin lands on PATH.
+# interpreter to a uv-managed Python, WATCHLING_IDF_PYTHON (default 3.12); system Pythons
+# are never used. Its own bin directory (uv keeps only that Python's tools there) goes
+# first on PATH; a symlink elsewhere would not do, as Python finds its stdlib from there.
 if [ -z "${IDF_PATH:-}" ]; then
   export IDF_PATH="$HOME/esp/esp-idf"
 fi
@@ -16,22 +16,19 @@ if [ ! -f "$IDF_PATH/export.sh" ]; then
 fi
 
 watchling_py_version="${WATCHLING_IDF_PYTHON:-3.12}"
-watchling_py=""
-if command -v uv >/dev/null 2>&1; then
-  watchling_py=$(uv python find "$watchling_py_version" 2>/dev/null)
+if ! command -v uv >/dev/null 2>&1; then
+  printf '%s\n' "uv not found. Install it (https://docs.astral.sh/uv/getting-started/installation/), then \`uv python install $watchling_py_version\`." >&2
+  unset watchling_py_version
+  return 1 2>/dev/null || exit 1
 fi
+watchling_py=$(uv python find --managed-python "$watchling_py_version" 2>/dev/null)
 if [ -z "$watchling_py" ]; then
-  watchling_py=$(command -v "python$watchling_py_version" 2>/dev/null)
-fi
-if [ -z "$watchling_py" ]; then
-  printf '%s\n' "Python $watchling_py_version not found. Install it (\`uv python install $watchling_py_version\`) or set WATCHLING_IDF_PYTHON." >&2
+  printf '%s\n' "No uv-managed Python $watchling_py_version. Run \`uv python install $watchling_py_version\` or set WATCHLING_IDF_PYTHON." >&2
   unset watchling_py watchling_py_version
   return 1 2>/dev/null || exit 1
 fi
-watchling_py_shim="${XDG_CACHE_HOME:-$HOME/.cache}/watchling/idf-python-$watchling_py_version"
-mkdir -p "$watchling_py_shim"
-ln -sf "$watchling_py" "$watchling_py_shim/python3"
-export PATH="$watchling_py_shim:$PATH"
-unset watchling_py watchling_py_version watchling_py_shim
+watchling_py_bin=$("$watchling_py" -c 'import os, sys; print(os.path.dirname(os.path.realpath(sys.executable)))')
+export PATH="$watchling_py_bin:$PATH"
+unset watchling_py watchling_py_version watchling_py_bin
 
 . "$IDF_PATH/export.sh"
