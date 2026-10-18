@@ -24,7 +24,6 @@
 #define COLOR_ELECTRIC_BLUE  0x00BFFF
 #define COLOR_RIM_OUTER      0x1760A0
 #define COLOR_RIM_INNER      0x103354
-#define COLOR_ACCENT_BASE    0x008DCE
 #define COLOR_TEXT_PRIMARY   0xF4F7FC
 #define COLOR_TEXT_SOFT      0xCBD5E1
 #define COLOR_TEXT_STATUS    0xD7E2EE
@@ -71,24 +70,15 @@
 #define ARC_SPAN             105
 
 /*
- * HUD border just inside the glass, static, no glow. Radii from the centre:
- *   outer rim   2 px  r 176..178  with a short cyan highlight at 12 o'clock
+ * HUD border just inside the glass: two plain rims, static, no glow, no accent marks (they made
+ * the face busy). Radii from the centre:
+ *   outer rim   2 px  r 176..178
  *   inner rim   1 px  r 173..174  darker, for depth
- *   accents     2 px  r 169..171  short segments at 12 / 3 / 6 / 9 o'clock, on the same circle as
- *                                 the gauges' faint outline so the side ones (in the agents'
- *                                 colours) read as lit marks on it instead of a second ring
- * The gauges' own ticks stand in for border ticks: a second tick ring would crowd them.
- * In LVGL angles 12 o'clock is 270, 3 o'clock 0, 6 o'clock 90 and 9 o'clock 180.
  */
 #define RIM_OUTER_DIAMETER   356
 #define RIM_OUTER_WIDTH      2
 #define RIM_INNER_DIAMETER   348
 #define RIM_INNER_WIDTH      1
-#define ACCENT_DIAMETER      OUTLINE_DIAMETER
-#define ACCENT_WIDTH         2
-#define HIGHLIGHT_DEG        10
-#define ACCENT_LONG_DEG      10 /* top and bottom */
-#define ACCENT_SHORT_DEG     6  /* left and right */
 
 #define TIME_Y               -142
 #define DATE_Y               -119
@@ -129,7 +119,8 @@ typedef struct {
     lv_opa_t opa;
 } gauge_tick_t;
 
-/* Everything but the rim and the robot, so face mode can hide it in one go. */
+/* Face mode shows only the robot: it hides the HUD border and everything else in one go each. */
+static lv_obj_t *s_border;
 static lv_obj_t *s_info;
 static usage_side_t s_claude;
 static usage_side_t s_codex;
@@ -412,31 +403,10 @@ static void rim_create(lv_obj_t *parent, int32_t diameter, int32_t width, uint32
     lv_obj_set_style_border_color(rim, lv_color_hex(color), 0);
 }
 
-/* A static segment of `len_deg` centred on `center_deg` (LVGL angles), drawn on the border. */
-static void border_segment_create(lv_obj_t *parent, int32_t diameter, int32_t center_deg, int32_t len_deg,
-                                  lv_style_t *style)
-{
-    int32_t start = (center_deg - len_deg / 2 + 360) % 360;
-    arc_create(parent, diameter, start, (start + len_deg) % 360, false, style, LV_PART_MAIN);
-}
-
 static void border_create(lv_obj_t *parent)
 {
-    /* Shared by every segment of that colour (see the gauge styles for why not local styles). */
-    static lv_style_t cyan, base, claude, codex;
-    arc_style_init(&cyan, ACCENT_WIDTH, COLOR_ELECTRIC_BLUE, LV_OPA_COVER);
-    arc_style_init(&base, ACCENT_WIDTH, COLOR_ACCENT_BASE, LV_OPA_COVER);
-    arc_style_init(&claude, ACCENT_WIDTH, COLOR_CLAUDE, LV_OPA_COVER);
-    arc_style_init(&codex, ACCENT_WIDTH, COLOR_CODEX, LV_OPA_COVER);
-
     rim_create(parent, RIM_OUTER_DIAMETER, RIM_OUTER_WIDTH, COLOR_RIM_OUTER);
-    border_segment_create(parent, RIM_OUTER_DIAMETER, 270, HIGHLIGHT_DEG, &cyan);
     rim_create(parent, RIM_INNER_DIAMETER, RIM_INNER_WIDTH, COLOR_RIM_INNER);
-
-    border_segment_create(parent, ACCENT_DIAMETER, 270, ACCENT_LONG_DEG, &cyan);
-    border_segment_create(parent, ACCENT_DIAMETER, 0, ACCENT_SHORT_DEG, &codex);
-    border_segment_create(parent, ACCENT_DIAMETER, 90, ACCENT_LONG_DEG, &base);
-    border_segment_create(parent, ACCENT_DIAMETER, 180, ACCENT_SHORT_DEG, &claude);
 }
 
 /* ---------- public API ---------- */
@@ -470,7 +440,12 @@ lv_obj_t *agent_dashboard_create(lv_obj_t *parent)
     lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(root, lv_color_hex(COLOR_BG), 0);
 
-    border_create(root);
+    s_border = lv_obj_create(root);
+    lv_obj_remove_style_all(s_border);
+    lv_obj_set_size(s_border, lv_pct(100), lv_pct(100));
+    lv_obj_center(s_border);
+    lv_obj_set_scrollable(s_border, false);
+    border_create(s_border);
 
     s_info = lv_obj_create(root);
     lv_obj_remove_style_all(s_info);
@@ -538,6 +513,7 @@ void agent_dashboard_update(const agent_dashboard_data_t *data)
 
 void agent_dashboard_set_face_mode(bool on)
 {
+    lv_obj_set_hidden(s_border, on);
     lv_obj_set_hidden(s_info, on);
     robot_face_set_fullscreen(on);
 }

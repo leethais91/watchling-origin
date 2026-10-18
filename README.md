@@ -63,7 +63,7 @@ also startles the robot. Usage and clock updates don't count as activity.
 
 ### Settings
 
-Pull down from the top edge (the small pill at 12 o'clock) to open settings: screen brightness
+Pull down from the top edge to open settings: screen brightness
 (left arc), speaker volume (right arc, plays a sample chime on release) and Voice (TTS) on/off.
 To avoid opening it by accident, the drag must start at the very top and travel about half the
 screen (a ring fills; release early and it springs back); taps and other swipes still poke the

@@ -20,11 +20,6 @@
 #define COLOR_TEXT_SECONDARY 0x94A3B8
 #define COLOR_SWITCH_OFF     0x243247
 
-/* Grabber pill at 12 o'clock, between the rim and the clock. */
-#define GRABBER_W            34
-#define GRABBER_H            5
-#define GRABBER_Y            17
-
 /*
  * Pull indicator: a drawer slides down with the finger and the ring around the gear fills.
  * PULL_OPEN_PX of travel (about half the screen, counted from the touch-down) opens settings.
@@ -98,18 +93,6 @@ static lv_obj_t *label_create(lv_obj_t *parent, const lv_font_t *font, uint32_t 
 }
 
 /* ---------- pull indicator ---------- */
-
-static void grabber_create(lv_obj_t *parent)
-{
-    lv_obj_t *pill = lv_obj_create(parent);
-    lv_obj_remove_style_all(pill);
-    lv_obj_set_size(pill, GRABBER_W, GRABBER_H);
-    lv_obj_align(pill, LV_ALIGN_TOP_MID, 0, GRABBER_Y);
-    lv_obj_set_style_radius(pill, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(pill, lv_color_hex(COLOR_ELECTRIC_BLUE), 0);
-    lv_obj_set_style_bg_opa(pill, LV_OPA_70, 0);
-    lv_obj_set_clickable(pill, false);
-}
 
 static void pull_indicator_create(lv_obj_t *parent)
 {
@@ -398,7 +381,6 @@ void settings_screen_create(lv_obj_t *parent, const settings_values_t *initial, 
     s_values = *initial;
     s_on_change = on_change;
     s_on_closed = on_closed;
-    grabber_create(parent);
     pull_indicator_create(parent);
     screen_create(parent);
 }
