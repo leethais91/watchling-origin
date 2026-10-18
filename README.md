@@ -121,5 +121,6 @@ How it behaves:
   if it is missing, `say` silently uses its default voice); `ECHOEAR_CHATTER=off` turns it off. It
   is also off whenever `ECHOEAR_TTS=off`, and USB-only like all speech. Each line is logged as
   `chatter: ...` in the bridge log; `ECHOEAR_CHATTER_DELAY_S=30` shortens the wait for trying it out.
+  Character, line catalog and how to add lines: [docs/chatter-design.md](docs/chatter-design.md).
 
 Wire format and message types: [docs/device-protocol.md](docs/device-protocol.md).
