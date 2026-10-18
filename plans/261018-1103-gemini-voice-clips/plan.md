@@ -1,6 +1,6 @@
 # Gemini voice clips — Plan
 
-Status: planned, waiting for a Gemini API key · Created: 2026-10-18
+Status: chatter part superseded by `plans/261018-1405-chatter-v3/`; mood clips deferred (reuse that plan's generator + voice ID) · Created: 2026-10-18
 
 Pre-generated voice clips for the robot's moods and idle chatter, made with Gemini 3.8 Flash TTS
 and a custom designed voice, stored in the bridge and played over the existing speech path.
