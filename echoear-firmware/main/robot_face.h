@@ -15,7 +15,7 @@ typedef enum {
     /* Base moods: what the robot does when nothing new happened. */
     ROBOT_MOOD_IDLE,  /* random blinks and the odd glance */
     ROBOT_MOOD_BUSY,  /* an agent is working: eyes sweep side to side */
-    ROBOT_MOOD_SLEEP, /* no bridge or dozing: eyes shut, head still, "Zz" drifting up */
+    ROBOT_MOOD_SLEEP, /* no bridge or dozing: closed lids breathing, z's floating up */
     /* Reactions to agent events. */
     ROBOT_MOOD_HAPPY,     /* task finished */
     ROBOT_MOOD_ATTENTION, /* waiting for the user */

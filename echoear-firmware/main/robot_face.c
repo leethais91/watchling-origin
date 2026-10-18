@@ -5,8 +5,8 @@
 
 /*
  * The head is one image (robot_head.png, visor left empty); the eyes are LVGL objects on
- * top of it. Pill eyes cover most moods; "happy" swaps them for ^ ^ arcs and "error" for
- * x x crosses. Everything moves with small objects so each animation frame only redraws
+ * top of it. Pill eyes cover most moods; "happy" swaps them for ^ ^ arcs, "sleep" for
+ * closed-lid arcs and "error" for > < squints. Everything moves with small objects so each animation frame only redraws
  * the eyes, apart from the slow head bob (a few px, a handful of redraws per second).
  *
  * Fullscreen hides the helmet and multiplies every eye size, offset and motion by
@@ -22,12 +22,16 @@
 #define EYE_DX           24 /* each eye sits this far left/right of the visor centre */
 #define EYE_GLOW_W       14
 #define EYE_CLOSED_H     2
-#define SHAPE_PX         24 /* box of the happy arcs and error crosses */
+#define SHAPE_PX         24 /* box of the happy and sleep arcs */
 #define STROKE_PX        5
-#define HAPPY_ARC_DY     5 /* the arc is the top of a circle; drop it so it looks centred */
+#define HAPPY_ARC_DY     5  /* the arc is the top of a circle; drop it so it looks centred */
+#define SLEEP_ARC_DY     -8 /* closed lids are the bottom of a circle; lift them */
+#define SQUINT_W         18 /* box of each > < squint */
+#define SQUINT_H         22
 
 #define COLOR_EYE        0x46E6FF
-#define COLOR_EYE_SLEEP  0x1C5470
+#define COLOR_EYE_SLEEP  0x5EC8E8
+#define COLOR_ZZZ        0xA5E8FF
 #define COLOR_HAPPY      0x4ADE80
 #define COLOR_ATTENTION  0xFBBF24
 #define COLOR_ERROR      0xF87171
@@ -52,17 +56,22 @@
 #define SHAKE_PX         4
 #define SHAKE_MS         45
 #define SHAKE_SWINGS     3
-/* Sleep: "Zz" above the right eye drifts up and fades, over and over. */
-#define ZZZ_DX           2
-#define ZZZ_DY           22
+/* Sleep: the lids glow slowly as if breathing, and three z's float up from the right eye. */
+#define BREATH_MS        2200
+#define ZZZ_COUNT        3
+#define ZZZ_DX           6  /* first z, right of the right eye's centre */
+#define ZZZ_DY           14 /* first z, above the visor centre */
+#define ZZZ_STEP_X       5  /* each next z sits up and to the right */
+#define ZZZ_STEP_Y       8
 #define ZZZ_RISE_PX      6
-#define ZZZ_MS           1800
+#define ZZZ_DRIFT_PX     2
+#define ZZZ_MS           2400
 
 /* Every geometry constant above is in small-head pixels; S() scales it to the current mode. */
 #define S(px)            ((px) * s_scale)
 
 typedef struct {
-    int32_t w; /* pill eye size; w == 0 means the mood draws arcs or crosses instead */
+    int32_t w; /* pill eye size; w == 0 means the mood draws arcs or squints instead */
     int32_t h;
     uint32_t color;
     lv_opa_t glow_opa;
@@ -73,7 +82,7 @@ typedef struct {
 static const mood_style_t MOODS[] = {
     [ROBOT_MOOD_IDLE] = {22, 30, COLOR_EYE, LV_OPA_60, true, true},
     [ROBOT_MOOD_BUSY] = {22, 18, COLOR_EYE, LV_OPA_60, true, true},
-    [ROBOT_MOOD_SLEEP] = {22, 4, COLOR_EYE_SLEEP, LV_OPA_TRANSP, false, false},
+    [ROBOT_MOOD_SLEEP] = {0, 0, COLOR_EYE_SLEEP, LV_OPA_TRANSP, false, false},
     [ROBOT_MOOD_HAPPY] = {0, 0, COLOR_HAPPY, LV_OPA_TRANSP, false, true},
     [ROBOT_MOOD_ATTENTION] = {26, 34, COLOR_ATTENTION, LV_OPA_60, true, true},
     [ROBOT_MOOD_ERROR] = {0, 0, COLOR_ERROR, LV_OPA_TRANSP, false, true},
@@ -84,11 +93,11 @@ static lv_obj_t *s_rig;  /* bounces and shakes */
 static lv_obj_t *s_head; /* bobs inside the rig; parent of the eyes */
 static lv_obj_t *s_pill[2];
 static lv_obj_t *s_arc[2];
-static lv_obj_t *s_cross[2][2];
-static lv_obj_t *s_zzz;
+static lv_obj_t *s_squint[2];
+static lv_obj_t *s_zzz[ZZZ_COUNT];
 static lv_timer_t *s_react_timer;
 /* lv_line keeps a pointer to its points, so they live here and are rescaled in place. */
-static lv_point_precise_t s_cross_points[2][2];
+static lv_point_precise_t s_squint_points[2][3];
 
 static robot_mood_t s_base;
 static robot_mood_t s_mood;
@@ -112,32 +121,44 @@ static void eyes_layout(void)
         int32_t cx = s_visor_x + (i == 0 ? -S(EYE_DX) : S(EYE_DX)) + s_gaze;
         lv_obj_set_size(s_pill[i], w, h);
         lv_obj_set_pos(s_pill[i], cx - w / 2, s_visor_y - h / 2);
-        lv_obj_set_pos(s_arc[i], cx - shape / 2, s_visor_y - shape / 2 + S(HAPPY_ARC_DY));
-        for (int k = 0; k < 2; k++) {
-            lv_obj_set_pos(s_cross[i][k], cx - shape / 2, s_visor_y - shape / 2);
-        }
+        int32_t arc_dy = s_mood == ROBOT_MOOD_SLEEP ? SLEEP_ARC_DY : HAPPY_ARC_DY;
+        lv_obj_set_pos(s_arc[i], cx - shape / 2, s_visor_y - shape / 2 + S(arc_dy));
+        lv_obj_set_pos(s_squint[i], cx - S(SQUINT_W) / 2, s_visor_y - S(SQUINT_H) / 2);
     }
-    lv_obj_set_pos(s_zzz, s_visor_x + S(EYE_DX + ZZZ_DX), s_visor_y - S(ZZZ_DY));
+    for (int i = 0; i < ZZZ_COUNT; i++) {
+        lv_obj_set_pos(s_zzz[i], s_visor_x + S(EYE_DX + ZZZ_DX + ZZZ_STEP_X * i),
+                       s_visor_y - S(ZZZ_DY + ZZZ_STEP_Y * i));
+    }
 }
 
-/* Sizes that only change with the scale: shapes, strokes, glow and the "Zz" font. */
+/* Sizes that only change with the scale: shapes, strokes, glow and the z fonts. */
 static void eyes_scale_apply(void)
 {
+    /* z, z, Z: each one a size up from the last. */
+    static const lv_font_t *const ZZZ_FONTS_SMALL[ZZZ_COUNT] = {
+        &lv_font_montserrat_14, &lv_font_montserrat_14, &lv_font_montserrat_16};
+    static const lv_font_t *const ZZZ_FONTS_FULL[ZZZ_COUNT] = {
+        &lv_font_montserrat_16, &lv_font_montserrat_20, &lv_font_montserrat_28};
     int32_t shape = S(SHAPE_PX);
-    s_cross_points[0][0] = (lv_point_precise_t){0, 0};
-    s_cross_points[0][1] = (lv_point_precise_t){shape, shape};
-    s_cross_points[1][0] = (lv_point_precise_t){shape, 0};
-    s_cross_points[1][1] = (lv_point_precise_t){0, shape};
+    int32_t w = S(SQUINT_W);
+    int32_t h = S(SQUINT_H);
+    /* Left eye ">" and right eye "<", both pointing at the nose. */
+    s_squint_points[0][0] = (lv_point_precise_t){0, 0};
+    s_squint_points[0][1] = (lv_point_precise_t){w, h / 2};
+    s_squint_points[0][2] = (lv_point_precise_t){0, h};
+    s_squint_points[1][0] = (lv_point_precise_t){w, 0};
+    s_squint_points[1][1] = (lv_point_precise_t){0, h / 2};
+    s_squint_points[1][2] = (lv_point_precise_t){w, h};
     for (int i = 0; i < 2; i++) {
         lv_obj_set_style_shadow_width(s_pill[i], s_scale > 1 ? FULL_GLOW_W : EYE_GLOW_W, 0);
         lv_obj_set_size(s_arc[i], shape, shape);
         lv_obj_set_style_arc_width(s_arc[i], S(STROKE_PX), LV_PART_MAIN);
-        for (int k = 0; k < 2; k++) {
-            lv_line_set_points(s_cross[i][k], s_cross_points[k], 2);
-            lv_obj_set_style_line_width(s_cross[i][k], S(STROKE_PX), 0);
-        }
+        lv_line_set_points(s_squint[i], s_squint_points[i], 3);
+        lv_obj_set_style_line_width(s_squint[i], S(STROKE_PX), 0);
     }
-    lv_obj_set_style_text_font(s_zzz, s_scale > 1 ? &lv_font_montserrat_28 : &lv_font_montserrat_14, 0);
+    for (int i = 0; i < ZZZ_COUNT; i++) {
+        lv_obj_set_style_text_font(s_zzz[i], s_scale > 1 ? ZZZ_FONTS_FULL[i] : ZZZ_FONTS_SMALL[i], 0);
+    }
 }
 
 static void eyes_style(const mood_style_t *m, robot_mood_t mood)
@@ -149,15 +170,23 @@ static void eyes_style(const mood_style_t *m, robot_mood_t mood)
         lv_obj_set_style_shadow_color(s_pill[i], color, 0);
         lv_obj_set_style_shadow_opa(s_pill[i], m->glow_opa, 0);
 
-        lv_obj_set_hidden(s_arc[i], mood != ROBOT_MOOD_HAPPY);
-        lv_obj_set_style_arc_color(s_arc[i], color, LV_PART_MAIN);
-        for (int k = 0; k < 2; k++) {
-            lv_obj_set_hidden(s_cross[i][k], mood != ROBOT_MOOD_ERROR);
-            lv_obj_set_style_line_color(s_cross[i][k], color, 0);
+        /* ^ for happy (top of the circle), closed lids for sleep (bottom). */
+        lv_obj_set_hidden(s_arc[i], mood != ROBOT_MOOD_HAPPY && mood != ROBOT_MOOD_SLEEP);
+        if (mood == ROBOT_MOOD_SLEEP) {
+            lv_arc_set_bg_angles(s_arc[i], 20, 160);
+        } else {
+            lv_arc_set_bg_angles(s_arc[i], 190, 350);
         }
+        lv_obj_set_style_arc_color(s_arc[i], color, LV_PART_MAIN);
+        lv_obj_set_style_arc_opa(s_arc[i], LV_OPA_COVER, LV_PART_MAIN);
+
+        lv_obj_set_hidden(s_squint[i], mood != ROBOT_MOOD_ERROR);
+        lv_obj_set_style_line_color(s_squint[i], color, 0);
     }
-    lv_obj_set_hidden(s_zzz, mood != ROBOT_MOOD_SLEEP);
-    lv_obj_set_style_text_color(s_zzz, color, 0);
+    for (int i = 0; i < ZZZ_COUNT; i++) {
+        lv_obj_set_hidden(s_zzz[i], mood != ROBOT_MOOD_SLEEP);
+        lv_obj_set_style_text_opa(s_zzz[i], LV_OPA_TRANSP, 0);
+    }
 }
 
 /* ---------- animations ---------- */
@@ -215,12 +244,45 @@ static void shake_anim_cb(void *var, int32_t value)
     translate_set(s_rig, LV_STYLE_TRANSLATE_X, value);
 }
 
-/* 0..100: the "Zz" rises and fades out, then starts over at the bottom. */
-static void zzz_anim_cb(void *var, int32_t value)
+static void breath_anim_cb(void *var, int32_t value)
 {
     LV_UNUSED(var);
-    translate_set(s_zzz, LV_STYLE_TRANSLATE_Y, -S(ZZZ_RISE_PX) * value / 100);
-    lv_obj_set_style_text_opa(s_zzz, (lv_opa_t)(LV_OPA_COVER * (100 - value) / 100), 0);
+    for (int i = 0; i < 2; i++) {
+        lv_obj_set_style_arc_opa(s_arc[i], (lv_opa_t)value, LV_PART_MAIN);
+    }
+}
+
+/* 0..100 for one z (the anim's var): fades in over the first quarter, out over the rest, drifting up. */
+static void zzz_anim_cb(void *var, int32_t value)
+{
+    lv_obj_t *z = var;
+    translate_set(z, LV_STYLE_TRANSLATE_Y, -S(ZZZ_RISE_PX) * value / 100);
+    translate_set(z, LV_STYLE_TRANSLATE_X, S(ZZZ_DRIFT_PX) * value / 100);
+    int32_t opa = value < 25 ? value * 4 : (100 - value) * 4 / 3;
+    lv_obj_set_style_text_opa(z, (lv_opa_t)(LV_OPA_COVER * opa / 100), 0);
+}
+
+/* The z's are the exception to "everything hangs off s_head": each animates itself. */
+static void zzz_start(void)
+{
+    for (int i = 0; i < ZZZ_COUNT; i++) {
+        lv_anim_t a;
+        lv_anim_init(&a);
+        lv_anim_set_var(&a, s_zzz[i]);
+        lv_anim_set_exec_cb(&a, zzz_anim_cb);
+        lv_anim_set_values(&a, 0, 100);
+        lv_anim_set_duration(&a, ZZZ_MS);
+        lv_anim_set_delay(&a, ZZZ_MS / ZZZ_COUNT * i);
+        lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+        lv_anim_start(&a);
+    }
+}
+
+static void zzz_stop(void)
+{
+    for (int i = 0; i < ZZZ_COUNT; i++) {
+        lv_anim_delete(s_zzz[i], zzz_anim_cb);
+    }
 }
 
 static void shake_done_cb(lv_anim_t *a)
@@ -290,7 +352,8 @@ static void mood_apply(robot_mood_t mood, robot_look_t look)
     lv_anim_delete(s_head, glow_anim_cb);
     lv_anim_delete(s_head, bounce_anim_cb);
     lv_anim_delete(s_head, shake_anim_cb);
-    lv_anim_delete(s_head, zzz_anim_cb);
+    lv_anim_delete(s_head, breath_anim_cb);
+    zzz_stop();
     translate_set(s_rig, LV_STYLE_TRANSLATE_X, 0);
     translate_set(s_rig, LV_STYLE_TRANSLATE_Y, 0);
     s_closed = 0;
@@ -309,10 +372,8 @@ static void mood_apply(robot_mood_t mood, robot_look_t look)
     lv_anim_t a;
     switch (mood) {
     case ROBOT_MOOD_SLEEP:
-        anim_prepare(&a, zzz_anim_cb, 0, 100, ZZZ_MS);
-        lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-        lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-        lv_anim_start(&a);
+        anim_ping_pong(breath_anim_cb, LV_OPA_40, LV_OPA_COVER, BREATH_MS);
+        zzz_start();
         break;
     case ROBOT_MOOD_BUSY:
         anim_ping_pong(gaze_anim_cb, -S(GAZE_PX), S(GAZE_PX), SWEEP_MS);
@@ -378,14 +439,15 @@ lv_obj_t *robot_face_create(lv_obj_t *parent, int32_t x, int32_t y)
         lv_obj_set_style_arc_opa(arc, LV_OPA_TRANSP, LV_PART_INDICATOR);
         s_arc[i] = arc;
 
-        for (int k = 0; k < 2; k++) {
-            lv_obj_t *line = lv_line_create(s_head);
-            lv_obj_set_style_line_rounded(line, true, 0);
-            s_cross[i][k] = line;
-        }
+        lv_obj_t *line = lv_line_create(s_head);
+        lv_obj_set_style_line_rounded(line, true, 0);
+        s_squint[i] = line;
     }
-    s_zzz = lv_label_create(s_head);
-    lv_label_set_text(s_zzz, "Zz");
+    for (int i = 0; i < ZZZ_COUNT; i++) {
+        s_zzz[i] = lv_label_create(s_head);
+        lv_label_set_text(s_zzz[i], i == ZZZ_COUNT - 1 ? "Z" : "z");
+        lv_obj_set_style_text_color(s_zzz[i], lv_color_hex(COLOR_ZZZ), 0);
+    }
     eyes_scale_apply();
 
     lv_timer_create(blink_timer_cb, BLINK_MIN_MS, NULL);

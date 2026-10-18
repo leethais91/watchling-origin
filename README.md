@@ -41,14 +41,14 @@ python3 tools/sound_effects.py embed confirm=robot:2 done=robot:1 attention=robo
 The robot head (`main/robot_face.c`) is one image with an empty visor
 (`main/assets/robot_head.png`, generated with Codex image generation); the eyes are drawn by LVGL.
 It idles (random blinks, glances), scans while Claude Code or Codex is working, sleeps without the
-bridge, and reacts to events: happy on done, amber on waiting for input, `× ×` on errors, looking
-toward the agent's arc (Claude left, Codex right). The working state needs the `UserPromptSubmit`
-hook, so re-run `npm run hooks:install` after updating the bridge.
+bridge, and reacts to events: happy on done, amber on waiting for input, `> <` squints on errors,
+looking toward the agent's arc (Claude left, Codex right). The working state needs the
+`UserPromptSubmit` hook, so re-run `npm run hooks:install` after updating the bridge.
 
 After 30 s with no agent event, permission request or touch, the dashboard gives way to face mode:
 only the neon rim stays and the eyes fill the screen. After 5 quiet minutes the robot dozes off
-(`Zz`). Any event or a tap brings the dashboard back; a tap also startles the robot. Usage and
-clock updates don't count as activity.
+(closed lids breathing, z's floating up). Any event or a tap brings the dashboard back; a tap
+also startles the robot. Usage and clock updates don't count as activity.
 
 ### Dashboard simulator
 
