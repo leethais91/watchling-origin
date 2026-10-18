@@ -10,6 +10,11 @@
       Re-shapes the picked candidates into main/assets/sounds/ and regenerates
       main/assets/sound_effects.c, which audio.c plays from flash. Styles can be mixed.
 
+  python3 tools/sound_effects.py generate --style chatter --variants 3
+  python3 tools/sound_effects.py bridge curious=2 playful=1 sleepy=3 surprised=1 happy=2
+      Chatter sounds the bridge plays before some idle-chatter lines: the picked candidates
+      are written to pc-bridge/assets/sfx/<effect>.wav (not embedded in the firmware).
+
 Stdlib only. The API key is read from the environment and never written anywhere.
 """
 import argparse
@@ -26,6 +31,7 @@ FIRMWARE = Path(__file__).resolve().parent.parent
 CANDIDATES = FIRMWARE / "tools" / "sfx-candidates"
 SOUNDS = FIRMWARE / "main" / "assets" / "sounds"
 C_OUT = FIRMWARE / "main" / "assets" / "sound_effects.c"
+BRIDGE_SFX = FIRMWARE.parent / "pc-bridge" / "assets" / "sfx"
 
 MAX_PROMPT_CHARS = 450  # ElevenLabs limit for the whole text
 API_URL = "https://api.elevenlabs.io/v1/sound-generation?output_format=pcm_16000"
@@ -53,6 +59,21 @@ STYLES = {
                   "a muted digital resonance that quickly fades; not alarming; no siren, no buzzer, no "
                   "game-over", 1.0),
     },
+    # Chatter moods (docs/chatter-design-v3.md, sound design direction).
+    "chatter": {
+        "suffix": "soft futuristic premium sci-fi UI sound, rounded synth, very short and clean, no speech, "
+                  "no music, no harsh beeps, no arcade",
+        "curious": ("a tiny robot curiosity sound: one gentle rounded electronic bloop followed by a delicate "
+                    "rising digital tone; friendly, inquisitive, subtle", 0.6),
+        "playful": ("a playful tiny AI robot: two quick bright digital chirps with a soft bouncy electronic "
+                    "texture; mischievous, cheerful, minimal", 0.6),
+        "sleepy": ("a sleepy little robot: a gentle descending synthesized hum with a warm rounded tone and "
+                   "smooth fade-out; calm, cozy", 0.8),
+        "surprised": ("a tiny robot surprise: one short rising crystalline electronic tone with a bright but "
+                      "gentle finish; slightly surprised, friendly", 0.6),
+        "happy": ("a tiny happy AI robot: two soft crystalline synth notes with a light sparkling resolution; "
+                  "warm, playful, satisfying", 0.7),
+    },
 }
 # Per effect: longest length kept on the device, and its peak level (fraction of full scale).
 # Loudest to quietest: attention > done > error > boot > working, so the sounds that need
@@ -64,6 +85,19 @@ EFFECTS = {
     "attention": (1200, 0.55),
     "error": (800, 0.45),
 }
+
+# Chatter sounds lead into a spoken line, so they stay well below the voice.
+CHATTER_EFFECTS = {
+    "curious": (700, 0.35),
+    "playful": (700, 0.35),
+    "sleepy": (900, 0.30),
+    "surprised": (700, 0.35),
+    "happy": (800, 0.35),
+}
+
+
+def effects_for(style: str) -> dict:
+    return CHATTER_EFFECTS if style == "chatter" else EFFECTS
 
 FADE_IN_MS = 5      # avoids a click when a clip starts mid-waveform
 FADE_MS = 80
@@ -92,9 +126,9 @@ def request_effect(api_key: str, prompt: str, seconds: float) -> array.array:
     return pcm
 
 
-def shape(pcm: array.array, name: str) -> array.array:
+def shape(pcm: array.array, name: str, effects: dict = EFFECTS) -> array.array:
     """Trim silent edges, cap the length with short fades, and level the peak. Idempotent."""
-    max_ms, target_peak = EFFECTS[name]
+    max_ms, target_peak = effects[name]
     threshold = int(SILENCE * 32767)
     loud = [i for i, s in enumerate(pcm) if abs(s) > threshold]
     if not loud:
@@ -139,12 +173,13 @@ def generate(args: argparse.Namespace) -> None:
     style = STYLES[args.style]
     out_dir = CANDIDATES / args.style
     out_dir.mkdir(parents=True, exist_ok=True)
-    for name in EFFECTS:
+    effects = effects_for(args.style)
+    for name in effects:
         if args.only and name not in args.only:
             continue
         prompt, seconds = style[name]
         for n in range(1, args.variants + 1):
-            pcm = shape(request_effect(api_key, f"{prompt}; {style['suffix']}", seconds), name)
+            pcm = shape(request_effect(api_key, f"{prompt}; {style['suffix']}", seconds), name, effects)
             path = out_dir / f"{name}-{n}.wav"
             write_wav(path, pcm)
             print(f"{path.relative_to(FIRMWARE)}  {len(pcm) * 1000 // SAMPLE_RATE} ms")
@@ -177,17 +212,31 @@ def embed(args: argparse.Namespace) -> None:
     print(f"wrote {C_OUT.relative_to(FIRMWARE)}")
 
 
+def bridge(args: argparse.Namespace) -> None:
+    picks = dict(pick.split("=", 1) for pick in args.picks)
+    if set(picks) != set(CHATTER_EFFECTS):
+        sys.exit(f"pick exactly one variant for each of: {', '.join(CHATTER_EFFECTS)}")
+    BRIDGE_SFX.mkdir(parents=True, exist_ok=True)
+    for name, variant in picks.items():
+        pcm = shape(read_wav(CANDIDATES / "chatter" / f"{name}-{variant}.wav"), name, CHATTER_EFFECTS)
+        write_wav(BRIDGE_SFX / f"{name}.wav", pcm)
+        print(f"pc-bridge/assets/sfx/{name}.wav  {len(pcm) * 1000 // SAMPLE_RATE} ms")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
     gen = sub.add_parser("generate", help="generate candidate variants")
     gen.add_argument("--style", choices=list(STYLES), required=True)
     gen.add_argument("--variants", type=int, default=4)
-    gen.add_argument("--only", nargs="*", choices=list(EFFECTS))
+    gen.add_argument("--only", nargs="*", choices=sorted(set(EFFECTS) | set(CHATTER_EFFECTS)))
     gen.set_defaults(func=generate)
     emb = sub.add_parser("embed", help="embed picked variants into the firmware")
     emb.add_argument("picks", nargs="+", metavar="effect=style:variant")
     emb.set_defaults(func=embed)
+    brg = sub.add_parser("bridge", help="copy picked chatter variants to pc-bridge/assets/sfx/")
+    brg.add_argument("picks", nargs="+", metavar="effect=variant")
+    brg.set_defaults(func=bridge)
     args = parser.parse_args()
     args.func(args)
 

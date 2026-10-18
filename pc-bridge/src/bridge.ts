@@ -7,9 +7,11 @@
  *   ECHOEAR_BLE=off                    USB only (no Bluetooth permission needed)
  *   ECHOEAR_CONFIRM_TIMEOUT_S=120      how long a request waits on the device
  *   ECHOEAR_TTS / ECHOEAR_TTS_VOICE    spoken announcements, see tts/tts-engine.ts
- *   ECHOEAR_CHATTER / ECHOEAR_CHATTER_VOICE  idle chatter, see chatter/chatter.ts
+ *   ECHOEAR_CHATTER / ECHOEAR_CHATTER_DELAY_S  idle chatter, see chatter/chatter.ts
  */
 import { Chatter } from "./chatter/chatter.js";
+import { ChatterClips } from "./chatter/chatter-clips.js";
+import { CHATTER_LINES } from "./chatter/chatter-lines.js";
 import { clockMessage } from "./clock/clock-message.js";
 import { startIpcServer } from "./ipc/ipc-server.js";
 import { SOCKET_PATH, USAGE_STATE_PATH } from "./ipc/paths.js";
@@ -21,7 +23,6 @@ import { BleTransport } from "./transport/ble-transport.js";
 import type { DeviceLink } from "./transport/device-link.js";
 import { SerialTransport } from "./transport/serial-transport.js";
 import { TransportHub } from "./transport/transport-hub.js";
-import { SayEngine } from "./tts/say-engine.js";
 import { createTtsEngine } from "./tts/tts-engine.js";
 import { startCodexSessionWatcher } from "./usage/codex-session-watcher.js";
 import { UsageStore } from "./usage/usage-store.js";
@@ -53,16 +54,24 @@ const speechLink = {
   sendAudio: (payload: Uint8Array) => transport.sendAudio(payload),
 };
 const speaker = tts && new Speaker(tts, speechLink, (err) => log(`speech failed: ${err.message}`));
-const chatterVoice = new SayEngine(process.env.ECHOEAR_CHATTER_VOICE ?? "Linh");
 const chatterDelayMs = Number(process.env.ECHOEAR_CHATTER_DELAY_S) * 1000;
+const chatterClips = speaker && process.env.ECHOEAR_CHATTER !== "off" ? await ChatterClips.load() : null;
+for (const problem of chatterClips?.problems ?? []) log(`chatter clip skipped: ${problem}`);
 const chatter =
-  speaker && process.env.ECHOEAR_CHATTER !== "off"
+  speaker && chatterClips
     ? new Chatter({
-        say: (text) => {
-          log(`chatter: ${text}${speechLink.alive ? "" : " (not spoken: voice off or device not on USB)"}`);
-          void speaker.say(text, chatterVoice);
+        play: (line) => {
+          if (!speechLink.alive) {
+            log(`chatter: ${line.id} (not played: voice off or device not on USB)`);
+            return false;
+          }
+          const clip = chatterClips.build(line, Math.random);
+          log(`chatter: ${line.id} [${clip.face.mood}${clip.sfx ? ` +${clip.sfx}` : ""}] ${line.text}`);
+          void speaker.playClip(clip.pcm, clip.face);
+          return true;
         },
         usage: () => usage.snapshot(),
+        available: chatterClips.available,
         quietMs: chatterDelayMs > 0 ? { min: chatterDelayMs, max: chatterDelayMs } : undefined,
       })
     : null;
@@ -153,6 +162,7 @@ setInterval(() => transport.send(clockMessage()), CLOCK_RESYNC_MS).unref();
 
 transport.start();
 chatter?.start();
+if (chatterClips) log(`chatter: ${chatterClips.available.size}/${CHATTER_LINES.length} clips`);
 log(`bridge listening on ${SOCKET_PATH}${tts ? "" : " (speech off)"}${chatter ? "" : " (chatter off)"}`);
 
 function shutdown(): never {

@@ -17,5 +17,6 @@ pc-bridge/dist/
 # Dashboard simulator
 echoear-firmware/simulator/cmake-out/
 
-# Sound effect candidates (tools/sound_effects.py generate)
+# Sound effect candidates (tools/sound_effects.py generate) and voice auditions (npm run voice:*)
 echoear-firmware/tools/sfx-candidates/
+pc-bridge/voice-candidates/
