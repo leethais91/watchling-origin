@@ -20,11 +20,17 @@ export interface ClockMessage {
   tz: number;
 }
 
+/** Face the device shows while a clip plays; older firmware ignores it. */
+export type FaceMood = "happy" | "surprised" | "sleep" | "idle";
+export type FaceLook = "center" | "left" | "right";
+
 /** Speech clip header; the PCM (16 kHz mono s16le) follows in FrameType.Audio frames. */
 export interface SpeechBeginMessage {
   t: "say";
   id: number;
   bytes: number;
+  mood?: FaceMood;
+  look?: FaceLook;
 }
 
 export interface ConfirmRequestMessage {

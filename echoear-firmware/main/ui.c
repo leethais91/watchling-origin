@@ -504,6 +504,31 @@ void ui_set_activity(const char *source, bool busy)
     bsp_display_unlock();
 }
 
+void ui_show_speech_face(const char *mood, const char *look, uint32_t hold_ms)
+{
+    static const struct {
+        const char *name;
+        robot_mood_t mood;
+    } moods[] = {
+        {"happy", ROBOT_MOOD_HAPPY},
+        {"surprised", ROBOT_MOOD_SURPRISED},
+        {"sleep", ROBOT_MOOD_SLEEP},
+        {"idle", ROBOT_MOOD_IDLE},
+    };
+    robot_look_t gaze = look == NULL ? ROBOT_LOOK_CENTER
+                        : strcmp(look, "left") == 0 ? ROBOT_LOOK_LEFT
+                        : strcmp(look, "right") == 0 ? ROBOT_LOOK_RIGHT
+                                                     : ROBOT_LOOK_CENTER;
+    for (size_t i = 0; i < sizeof(moods) / sizeof(moods[0]); i++) {
+        if (mood != NULL && strcmp(mood, moods[i].name) == 0) {
+            bsp_display_lock(0);
+            robot_face_react(moods[i].mood, gaze, hold_ms);
+            bsp_display_unlock();
+            return;
+        }
+    }
+}
+
 void ui_show_confirm(uint32_t id, const char *source, const char *tool, const char *summary, ui_risk_t risk)
 {
     bsp_display_lock(0);

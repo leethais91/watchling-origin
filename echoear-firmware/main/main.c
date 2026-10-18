@@ -177,6 +177,36 @@ static void handle_event(const cJSON *msg)
     audio_play_chime(chimes[event_kind]);
 }
 
+/*
+ * Faces a speech clip may ask for (say.mood / say.look), packed into the clip's audio tag:
+ * mood index + 1 in the low byte (0 = no face change), look index in the next byte.
+ */
+static const char *const SPEECH_MOODS[] = {"happy", "surprised", "sleep", "idle"};
+static const char *const SPEECH_LOOKS[] = {"center", "left", "right"};
+
+static int name_index(const char *const *names, size_t count, const char *name)
+{
+    for (size_t i = 0; name != NULL && i < count; i++) {
+        if (strcmp(names[i], name) == 0) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+static uint32_t speech_face_tag(const cJSON *msg)
+{
+    int mood = name_index(SPEECH_MOODS, sizeof(SPEECH_MOODS) / sizeof(SPEECH_MOODS[0]), json_str(msg, "mood"));
+    int look = name_index(SPEECH_LOOKS, sizeof(SPEECH_LOOKS) / sizeof(SPEECH_LOOKS[0]), json_str(msg, "look"));
+    return mood < 0 ? 0 : (uint32_t)(mood + 1) | (uint32_t)(look < 0 ? 0 : look) << 8;
+}
+
+/* Playback task: the clip's face shows for as long as the clip plays. */
+static void on_speech_start(uint32_t tag, uint32_t duration_ms)
+{
+    ui_show_speech_face(SPEECH_MOODS[(tag & 0xff) - 1], SPEECH_LOOKS[(tag >> 8) & 0xff], duration_ms);
+}
+
 static void handle_confirm_request(const cJSON *msg)
 {
     const char *risk = json_str(msg, "risk");
@@ -231,7 +261,7 @@ static void on_host_message(const char *json, size_t len)
     } else if (strcmp(type, "time") == 0) {
         handle_time(msg);
     } else if (strcmp(type, "say") == 0) {
-        audio_speech_begin((uint16_t)json_int(msg, "id", 0), (size_t)json_int(msg, "bytes", 0));
+        audio_speech_begin((uint16_t)json_int(msg, "id", 0), (size_t)json_int(msg, "bytes", 0), speech_face_tag(msg));
     } else if (strcmp(type, "say_end") == 0) {
         audio_speech_end((uint16_t)json_int(msg, "id", 0));
     } else if (strcmp(type, "activity") == 0) {
@@ -268,6 +298,7 @@ void app_main(void)
 
     audio_set_volume(s_settings.volume);
     audio_set_speech_enabled(s_settings.voice);
+    audio_set_speech_start_cb(on_speech_start);
     if (audio_init() == ESP_OK) {
         audio_play_chime(AUDIO_CHIME_BOOT);
     } else {

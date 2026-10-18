@@ -23,6 +23,7 @@ typedef struct {
     const int16_t *pcm; /* mono */
     size_t samples;
     bool owned;         /* heap clip to free after playing */
+    uint32_t tag;       /* speech clips: passed to the start callback when non-zero */
 } clip_t;
 
 static const sound_effect_t *const CHIME_SOUNDS[AUDIO_CHIME_COUNT] = {
@@ -38,11 +39,13 @@ static QueueHandle_t s_queue;
 static int s_volume = 60;
 /* Written from the LVGL task, read on the host link RX task. */
 static volatile bool s_speech_enabled = true;
+static audio_speech_start_cb_t s_speech_start_cb;
 
 /* Speech clip being received (host link RX task only). */
 static int16_t *s_rx_pcm;
 static size_t s_rx_bytes;
 static uint16_t s_rx_id;
+static uint32_t s_rx_tag;
 
 /* The BSP configures I2S as stereo, so mono clips go out as duplicated L/R frames. */
 static void clip_play(const clip_t *clip)
@@ -66,6 +69,9 @@ static void playback_task(void *arg)
     clip_t clip;
     for (;;) {
         xQueueReceive(s_queue, &clip, portMAX_DELAY);
+        if (clip.tag != 0 && s_speech_start_cb != NULL) {
+            s_speech_start_cb(clip.tag, (uint32_t)(clip.samples * 1000 / SAMPLE_RATE));
+        }
         clip_play(&clip);
         if (clip.owned) {
             heap_caps_free((void *)clip.pcm);
@@ -116,6 +122,11 @@ void audio_set_speech_enabled(bool enabled)
     s_speech_enabled = enabled;
 }
 
+void audio_set_speech_start_cb(audio_speech_start_cb_t cb)
+{
+    s_speech_start_cb = cb;
+}
+
 void audio_play_chime(audio_chime_t chime)
 {
     if (chime < AUDIO_CHIME_COUNT) {
@@ -125,7 +136,7 @@ void audio_play_chime(audio_chime_t chime)
     }
 }
 
-void audio_speech_begin(uint16_t id, size_t bytes)
+void audio_speech_begin(uint16_t id, size_t bytes, uint32_t tag)
 {
     heap_caps_free(s_rx_pcm);
     s_rx_pcm = NULL;
@@ -144,6 +155,7 @@ void audio_speech_begin(uint16_t id, size_t bytes)
     }
     s_rx_bytes = bytes;
     s_rx_id = id;
+    s_rx_tag = tag;
 }
 
 void audio_speech_data(uint16_t id, uint32_t offset, const uint8_t *pcm, size_t len)
@@ -159,7 +171,7 @@ void audio_speech_end(uint16_t id)
     if (s_rx_pcm == NULL || id != s_rx_id) {
         return;
     }
-    clip_t clip = {.pcm = s_rx_pcm, .samples = s_rx_bytes / sizeof(int16_t), .owned = true};
+    clip_t clip = {.pcm = s_rx_pcm, .samples = s_rx_bytes / sizeof(int16_t), .owned = true, .tag = s_rx_tag};
     s_rx_pcm = NULL;
     enqueue(&clip);
 }

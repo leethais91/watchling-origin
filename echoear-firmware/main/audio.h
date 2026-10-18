@@ -32,10 +32,18 @@ void audio_set_speech_enabled(bool enabled);
 void audio_play_chime(audio_chime_t chime);
 
 /*
+ * Runs on the playback task when a speech clip with a non-zero tag starts playing (after any
+ * chime queued before it), with the clip's length. Lets the caller sync the face to the clip.
+ */
+typedef void (*audio_speech_start_cb_t)(uint32_t tag, uint32_t duration_ms);
+void audio_set_speech_start_cb(audio_speech_start_cb_t cb);
+
+/*
  * Speech clip assembly (16 kHz mono s16le). Call these from one task only (the host link
  * RX task): begin allocates, data copies chunks in at their offset, end queues playback.
- * A new begin discards an unfinished clip; chunks for another id are ignored.
+ * A new begin discards an unfinished clip; chunks for another id are ignored. `tag` (0 = none)
+ * is handed to the speech start callback.
  */
-void audio_speech_begin(uint16_t id, size_t bytes);
+void audio_speech_begin(uint16_t id, size_t bytes, uint32_t tag);
 void audio_speech_data(uint16_t id, uint32_t offset, const uint8_t *pcm, size_t len);
 void audio_speech_end(uint16_t id);

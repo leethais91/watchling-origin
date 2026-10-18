@@ -40,6 +40,20 @@ test("caps clips at the device limit and skips when the device is gone", async (
   assert.equal(offline.sent.length, 0);
 });
 
+test("a ready-made clip carries the face to show and shares the id sequence", async () => {
+  const { link, sent } = fakeLink();
+  const speaker = new Speaker(engine(4), link, assert.fail);
+  void speaker.say("hi");
+  await speaker.playClip(Buffer.alloc(6), { mood: "idle", look: "left" });
+  await speaker.playClip(Buffer.alloc(2), { mood: "happy" });
+  const headers = sent.filter((m) => "t" in m && m.t === "say");
+  assert.deepEqual(headers, [
+    { t: "say", id: 1, bytes: 4 },
+    { t: "say", id: 2, bytes: 6, mood: "idle", look: "left" },
+    { t: "say", id: 3, bytes: 2, mood: "happy" },
+  ]);
+});
+
 test("a failing engine reports the error and later phrases still play", async () => {
   const { link, sent } = fakeLink();
   const errors: string[] = [];

@@ -59,5 +59,11 @@ void ui_set_activity(const char *source, bool busy);
 void ui_show_confirm(uint32_t id, const char *source, const char *tool, const char *summary, ui_risk_t risk);
 /* Hides the modal if it still shows request `id`. */
 void ui_cancel_confirm(uint32_t id);
+/*
+ * A speech clip started playing: show `mood` ("happy" / "surprised" / "sleep" / "idle") looking
+ * `look` ("center" / "left" / "right", NULL = center) for `hold_ms`, then the base mood. Unknown
+ * moods are ignored.
+ */
+void ui_show_speech_face(const char *mood, const char *look, uint32_t hold_ms);
 /* Bluetooth pairing started (show `passkey` for the user to type on the host) or ended. */
 void ui_show_pairing(bool active, uint32_t passkey);
