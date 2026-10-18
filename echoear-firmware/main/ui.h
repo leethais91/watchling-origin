@@ -1,11 +1,12 @@
 /*
- * Round 360x360 UI: usage dashboard plus the permission confirm modal.
+ * Round 360x360 UI: usage dashboard, settings screen and the permission confirm modal.
  * Public functions take the LVGL lock themselves; call them from any task.
  */
 #pragma once
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "settings_screen.h"
 
 /* Percentages 0..100, or -1 when unknown. cost_today < 0 when unknown. */
 typedef struct {
@@ -38,8 +39,12 @@ typedef struct {
 /* Polled once per second; no live link hides any open modal. */
 typedef ui_link_state_t (*ui_link_probe_t)(void);
 
-/* Builds the dashboard. Requires bsp_display_start() to have run. */
-void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe);
+/*
+ * Builds the dashboard and the settings screen (showing `settings`). `on_settings` runs in the
+ * LVGL task when the user changes one. Requires bsp_display_start() to have run.
+ */
+void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe, const settings_values_t *settings,
+             settings_change_cb_t on_settings);
 
 void ui_set_usage(const ui_usage_t *usage);
 /* The system clock now holds UTC; show it shifted by the host's offset (minutes east of UTC). */

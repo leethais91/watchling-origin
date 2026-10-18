@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Builds the dashboard simulator and renders a 360x360 PNG with the round panel mask
 # applied (corners outside the glass shown black).
-#   ./render-screenshot.sh out.png [--stress | --unknown | --confirm] [--mood NAME] [--face] [--after-ms N]
+#   ./render-screenshot.sh out.png [--stress | --unknown | --confirm | --ui] [--pull N | --settings] [--mood NAME] [--face] [--after-ms N]
 # Requires: cmake, pkg-config, SDL2, ImageMagick (`magick`).
 set -euo pipefail
 
-out=${1:?usage: render-screenshot.sh out.png [--stress | --unknown | --confirm] [--mood NAME] [--face] [--after-ms N]}
+out=${1:?usage: render-screenshot.sh out.png [--stress | --unknown | --confirm | --ui] [--pull N | --settings] [--mood NAME] [--face] [--after-ms N]}
 shift
 here=$(cd "$(dirname "$0")" && pwd)
 bin_dir="$here/cmake-out"

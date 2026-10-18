@@ -50,6 +50,15 @@ only the neon rim stays and the eyes fill the screen. After 5 quiet minutes the 
 (closed lids breathing, z's floating up). Any event or a tap brings the dashboard back; a tap
 also startles the robot. Usage and clock updates don't count as activity.
 
+### Settings
+
+Pull down from the top edge (the small pill at 12 o'clock) to open settings: screen brightness
+(left arc), speaker volume (right arc, plays a sample chime on release) and Voice (TTS) on/off.
+To avoid opening it by accident, the drag must start at the very top and travel about half the
+screen (a ring fills; release early and it springs back); taps and other swipes still poke the
+robot. Swipe up, tap the hint, or wait 15 s to close. Values are kept in NVS. Turning the voice
+off tells the bridge to stop speaking; chimes keep playing.
+
 ### Dashboard simulator
 
 The idle dashboard (`main/agent_dashboard.c`) is plain LVGL, so it also builds on the host
@@ -62,6 +71,8 @@ cd echoear-firmware/simulator
 ./render-screenshot.sh /tmp/dash.png --stress     # worst-case values; also --unknown, --after-ms N
 ./render-screenshot.sh /tmp/dash.png --mood happy # idle busy sleep happy attention error surprised
 ./render-screenshot.sh /tmp/face.png --face       # fullscreen face mode; combine with --mood
+./render-screenshot.sh /tmp/set.png --settings    # settings screen; --pull N for the pull indicator
+./cmake-out/dashboard_sim --ui                    # firmware UI; try the pull-down with the mouse
 ./cmake-out/dashboard_sim                         # live SDL window, cycles through the robot moods
 ```
 

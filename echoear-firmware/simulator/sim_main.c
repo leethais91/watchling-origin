@@ -6,6 +6,9 @@
  *   --unknown                         every value unknown, as at boot before the bridge reports
  *   --confirm                         firmware UI (ui.c) with the permission modal open
  *   --pairing                         firmware UI with the Bluetooth passkey screen
+ *   --ui                              firmware UI (ui.c) as at boot; try the pull-down with the mouse
+ *   --pull N                          settings pull indicator for a drag of N px from the top edge
+ *   --settings                        settings screen open
  *   --mood NAME                       robot mood: idle busy sleep happy attention error surprised
  *   --face                            fullscreen face mode (the dashboard after 30 s of quiet)
  *   --after-ms N                      with --shot: let animations run N ms before capturing
@@ -20,6 +23,7 @@
 #include "lvgl.h"
 #include "agent_dashboard.h"
 #include "robot_face.h"
+#include "settings_screen.h"
 #include "ui.h"
 
 #define HOR_RES 360
@@ -85,6 +89,19 @@ static void sim_decision(uint32_t id, bool approve)
     printf("decision #%u: %s\n", (unsigned)id, approve ? "approve" : "deny");
 }
 
+static const settings_values_t SIM_SETTINGS = {.brightness = 70, .volume = 60, .voice = true};
+
+static void sim_settings(settings_field_t field, const settings_values_t *values, bool final)
+{
+    printf("settings: brightness %d%%, volume %d%%, voice %s%s\n", values->brightness, values->volume,
+           values->voice ? "on" : "off", final ? "" : " (dragging)");
+}
+
+static void sim_settings_closed(void)
+{
+    printf("settings closed\n");
+}
+
 static ui_link_state_t sim_link_probe(void)
 {
     return (ui_link_state_t){.usb = true, .ble = true};
@@ -137,6 +154,9 @@ int main(int argc, char **argv)
     bool confirm = false;
     bool pairing = false;
     bool face = false;
+    bool firmware_ui = false;
+    bool settings = false;
+    int32_t pull = 0;
     uint32_t after_ms = SHOT_SETTLE_MS;
     int mood = -1;
     for (int i = 1; i < argc; i++) {
@@ -150,6 +170,12 @@ int main(int argc, char **argv)
             confirm = true;
         } else if (strcmp(argv[i], "--pairing") == 0) {
             pairing = true;
+        } else if (strcmp(argv[i], "--ui") == 0) {
+            firmware_ui = true;
+        } else if (strcmp(argv[i], "--settings") == 0) {
+            settings = true;
+        } else if (strcmp(argv[i], "--pull") == 0 && i + 1 < argc) {
+            pull = (int32_t)strtol(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--face") == 0) {
             face = true;
         } else if (strcmp(argv[i], "--mood") == 0 && i + 1 < argc && (mood = mood_from_name(argv[++i])) >= 0) {
@@ -157,7 +183,7 @@ int main(int argc, char **argv)
         } else if (strcmp(argv[i], "--after-ms") == 0 && i + 1 < argc) {
             after_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
         } else {
-            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown | --confirm | --pairing] [--mood NAME] [--face]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown | --confirm | --pairing | --ui] [--pull N | --settings] [--mood NAME] [--face]\n", argv[0]);
             return 2;
         }
     }
@@ -174,14 +200,19 @@ int main(int argc, char **argv)
         lv_sdl_mouse_create();
     }
 
+    if (firmware_ui) {
+        ui_init(sim_decision, sim_link_probe, &SIM_SETTINGS, sim_settings);
+        return shot_path != NULL ? render_shot(shot_path, after_ms) : run_window();
+    }
+
     if (pairing) {
-        ui_init(sim_decision, sim_link_probe);
+        ui_init(sim_decision, sim_link_probe, &SIM_SETTINGS, sim_settings);
         ui_show_pairing(true, 48213);
         return shot_path != NULL ? render_shot(shot_path, after_ms) : run_window();
     }
 
     if (confirm) {
-        ui_init(sim_decision, sim_link_probe);
+        ui_init(sim_decision, sim_link_probe, &SIM_SETTINGS, sim_settings);
         ui_show_confirm(7, "claude", "Bash",
                         "cd echoear-firmware && idf.py -p /dev/cu.usbmodem1301 flash monitor 2>&1 | tee flash.log && "
                         "git push origin main --force-with-lease",
@@ -219,6 +250,13 @@ int main(int argc, char **argv)
     }
     agent_dashboard_update(&data);
     agent_dashboard_set_face_mode(face);
+
+    settings_screen_create(lv_layer_top(), &SIM_SETTINGS, sim_settings, sim_settings_closed);
+    if (settings) {
+        settings_screen_pull_release(LV_COORD_MAX);
+    } else if (pull > 0) {
+        settings_screen_pull(pull);
+    }
 
     if (mood >= 0) {
         mood_show((robot_mood_t)mood);

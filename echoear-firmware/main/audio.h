@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
@@ -19,6 +20,12 @@ typedef enum {
 
 /* Opens the speaker codec and starts playback. Call after bsp_display_start(). */
 esp_err_t audio_init(void);
+
+/* Speaker volume 0..100 %. Safe before audio_init() (applied when the codec opens). */
+void audio_set_volume(int percent);
+
+/* Speech clips are dropped while disabled; chimes keep playing. Enabled at boot. */
+void audio_set_speech_enabled(bool enabled);
 
 /* Queues a chime; non-blocking, safe from any task. No-op if audio_init() failed. */
 void audio_play_chime(audio_chime_t chime);

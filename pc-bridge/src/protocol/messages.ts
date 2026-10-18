@@ -64,8 +64,9 @@ export type HostMessage =
   | ConfirmRequestMessage
   | { t: "confirm_cancel"; id: number };
 
-/** Device → bridge */
+/** Device → bridge. `voice` (spoken announcements on/off) is missing from older firmware. */
 export type DeviceMessage =
-  | { t: "hello"; fw: string }
+  | { t: "hello"; fw: string; voice?: boolean }
+  | { t: "settings"; voice: boolean }
   | { t: "pong" }
   | { t: "confirm_res"; id: number; action: Decision; src: DecisionSource };

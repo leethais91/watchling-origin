@@ -42,10 +42,12 @@ const transport = new TransportHub(links);
 const usage = new UsageStore(USAGE_STATE_PATH);
 await usage.restore();
 const tts = createTtsEngine();
+/** Voice switch on the device's settings screen; synthesis is skipped while it is off. */
+let deviceVoice = true;
 /** Speech clips are raw PCM: USB only. Over BLE the device still chimes. */
 const speechLink = {
   get alive() {
-    return transport.active === usb && usb.alive;
+    return deviceVoice && transport.active === usb && usb.alive;
   },
   send: (msg: HostMessage) => transport.send(msg),
   sendAudio: (payload: Uint8Array) => transport.sendAudio(payload),
@@ -57,7 +59,7 @@ const chatter =
   speaker && process.env.ECHOEAR_CHATTER !== "off"
     ? new Chatter({
         say: (text) => {
-          log(`chatter: ${text}${speechLink.alive ? "" : " (not spoken: device not on USB)"}`);
+          log(`chatter: ${text}${speechLink.alive ? "" : " (not spoken: voice off or device not on USB)"}`);
           void speaker.say(text, chatterVoice);
         },
         usage: () => usage.snapshot(),
@@ -102,10 +104,15 @@ transport.on("log", (line) => log("[device]", line));
 transport.on("message", (msg) => {
   switch (msg.t) {
     case "hello":
-      log(`device ready (fw ${msg.fw})`);
+      deviceVoice = msg.voice ?? true;
+      log(`device ready (fw ${msg.fw})${deviceVoice ? "" : " (voice off)"}`);
       transport.send(clockMessage());
       transport.send(usage.snapshot());
       broker.resendActive();
+      break;
+    case "settings":
+      deviceVoice = msg.voice;
+      log(`device voice ${deviceVoice ? "on" : "off"}`);
       break;
     case "confirm_res": {
       const accepted = broker.onDeviceDecision(msg.id, msg.action, msg.src);

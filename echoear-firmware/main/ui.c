@@ -9,6 +9,7 @@
 #include "agent_dashboard.h"
 #include "assets/dashboard_assets.h"
 #include "robot_face.h"
+#include "settings_screen.h"
 
 /*
  * The idle dashboard lives in agent_dashboard.c; this file owns the confirm modal and
@@ -75,6 +76,9 @@ static bool s_bridge_linked;
 static uint32_t s_last_activity;
 static bool s_face_mode;
 
+/* Touch-down y of a pull that started at the top edge; -1 while the touch is a plain poke. */
+static int32_t s_pull_start_y = -1;
+
 static lv_obj_t *s_pairing;
 static lv_obj_t *s_pairing_code;
 
@@ -104,17 +108,47 @@ static void activity_note(void)
     face_mode_set(false);
 }
 
-static void poke_cb(lv_event_t *e)
+static int32_t touch_y(void)
 {
-    LV_UNUSED(e);
-    activity_note();
-    robot_base_update(); /* wakes a dozing robot first; a base change ends any reaction */
-    robot_face_react(ROBOT_MOOD_SURPRISED, ROBOT_LOOK_CENTER, SURPRISED_MS);
+    lv_point_t point;
+    lv_indev_get_point(lv_indev_active(), &point);
+    return point.y;
+}
+
+/*
+ * A touch that starts at the top edge is a pull towards settings; any other touch pokes the
+ * robot. Settings open only if nothing else (modal, pairing) took the screen meanwhile.
+ */
+static void touch_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_PRESSED) {
+        activity_note();
+        int32_t y = touch_y();
+        if (y < SETTINGS_PULL_EDGE_PX) {
+            s_pull_start_y = y;
+            return;
+        }
+        robot_base_update(); /* wakes a dozing robot first; a base change ends any reaction */
+        robot_face_react(ROBOT_MOOD_SURPRISED, ROBOT_LOOK_CENTER, SURPRISED_MS);
+        return;
+    }
+    if (s_pull_start_y < 0) {
+        return;
+    }
+    int32_t distance = touch_y() - s_pull_start_y;
+    if (code == LV_EVENT_PRESSING) {
+        settings_screen_pull(distance);
+        return;
+    }
+    bool screen_free = code == LV_EVENT_RELEASED && !s_modal_visible && lv_obj_is_hidden(s_pairing);
+    settings_screen_pull_release(screen_free ? distance : 0);
+    s_pull_start_y = -1;
 }
 
 /*
  * The dashboard has nothing to tap, so one invisible layer takes every touch that the
- * modal and pairing screens (created later, on top of it) do not.
+ * settings, modal and pairing screens (created later, on top of it) do not.
  */
 static void touch_catcher_create(void)
 {
@@ -122,7 +156,11 @@ static void touch_catcher_create(void)
     lv_obj_remove_style_all(catcher);
     lv_obj_set_size(catcher, BSP_LCD_H_RES, BSP_LCD_V_RES);
     lv_obj_center(catcher);
-    lv_obj_add_event_cb(catcher, poke_cb, LV_EVENT_PRESSED, NULL);
+    static const lv_event_code_t codes[] = {LV_EVENT_PRESSED, LV_EVENT_PRESSING, LV_EVENT_RELEASED,
+                                            LV_EVENT_PRESS_LOST};
+    for (size_t i = 0; i < sizeof(codes) / sizeof(codes[0]); i++) {
+        lv_obj_add_event_cb(catcher, touch_cb, codes[i], NULL);
+    }
 }
 
 /* ---------- confirm modal ---------- */
@@ -217,6 +255,7 @@ static void modal_show(uint32_t id, const lv_image_dsc_t *agent_logo, const char
                        ui_risk_t risk)
 {
     uint32_t ring = risk == UI_RISK_HIGH ? COLOR_DANGER : COLOR_WARN;
+    settings_screen_close(); /* the request needs an answer; settings would wait behind it */
     s_modal_id = id;
     lv_obj_set_style_border_color(s_modal, lv_color_hex(ring), 0);
     lv_obj_set_style_text_color(s_modal_tool, lv_color_hex(ring), 0);
@@ -347,7 +386,7 @@ static void status_timer_cb(lv_timer_t *timer)
     if (!linked && s_modal_visible) {
         modal_hide(); /* the bridge releases the request to the terminal on its side */
     }
-    if (!s_face_mode && !s_modal_visible && lv_obj_is_hidden(s_pairing) &&
+    if (!s_face_mode && !s_modal_visible && lv_obj_is_hidden(s_pairing) && !settings_screen_is_open() &&
         lv_tick_elaps(s_last_activity) >= FACE_IDLE_MS) {
         face_mode_set(true);
     }
@@ -355,7 +394,8 @@ static void status_timer_cb(lv_timer_t *timer)
 
 /* ---------- public API ---------- */
 
-void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe)
+void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe, const settings_values_t *settings,
+             settings_change_cb_t on_settings)
 {
     s_on_decision = on_decision;
     s_link_probe = link_probe;
@@ -378,6 +418,7 @@ void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe)
     s_last_activity = lv_tick_get();
     robot_base_update();
     touch_catcher_create();
+    settings_screen_create(lv_layer_top(), settings, on_settings, activity_note);
     modal_create();
     pairing_create();
     lv_timer_create(status_timer_cb, STATUS_POLL_MS, NULL);
@@ -487,6 +528,7 @@ void ui_show_pairing(bool active, uint32_t passkey)
         char code[8];
         snprintf(code, sizeof(code), "%06lu", (unsigned long)passkey);
         lv_label_set_text(s_pairing_code, code);
+        settings_screen_close();
         activity_note();
     }
     lv_obj_set_hidden(s_pairing, !active);

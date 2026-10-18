@@ -14,7 +14,6 @@
 static const char *TAG = "audio";
 
 #define SAMPLE_RATE        16000
-#define SPEAKER_VOLUME     60
 /* 15 s of speech. Keep in sync with MAX_SPEECH_BYTES in pc-bridge/src/speech/speaker.ts. */
 #define SPEECH_MAX_BYTES   (15 * SAMPLE_RATE * 2)
 #define PLAY_QUEUE_LEN     8
@@ -35,6 +34,9 @@ static const sound_effect_t *const CHIME_SOUNDS[AUDIO_CHIME_COUNT] = {
 
 static esp_codec_dev_handle_t s_speaker;
 static QueueHandle_t s_queue;
+static int s_volume = 60;
+/* Written from the LVGL task, read on the host link RX task. */
+static volatile bool s_speech_enabled = true;
 
 /* Speech clip being received (host link RX task only). */
 static int16_t *s_rx_pcm;
@@ -91,13 +93,26 @@ esp_err_t audio_init(void)
         .bits_per_sample = 16,
     };
     ESP_RETURN_ON_FALSE(esp_codec_dev_open(s_speaker, &fs) == ESP_CODEC_DEV_OK, ESP_FAIL, TAG, "codec open failed");
-    esp_codec_dev_set_out_vol(s_speaker, SPEAKER_VOLUME);
+    esp_codec_dev_set_out_vol(s_speaker, s_volume);
 
     s_queue = xQueueCreate(PLAY_QUEUE_LEN, sizeof(clip_t));
     ESP_RETURN_ON_FALSE(s_queue, ESP_ERR_NO_MEM, TAG, "queue create failed");
     ESP_RETURN_ON_FALSE(xTaskCreate(playback_task, "audio_play", 4096, NULL, 5, NULL) == pdPASS,
                         ESP_ERR_NO_MEM, TAG, "task create failed");
     return ESP_OK;
+}
+
+void audio_set_volume(int percent)
+{
+    s_volume = percent;
+    if (s_speaker != NULL) {
+        esp_codec_dev_set_out_vol(s_speaker, percent);
+    }
+}
+
+void audio_set_speech_enabled(bool enabled)
+{
+    s_speech_enabled = enabled;
 }
 
 void audio_play_chime(audio_chime_t chime)
@@ -113,6 +128,9 @@ void audio_speech_begin(uint16_t id, size_t bytes)
 {
     heap_caps_free(s_rx_pcm);
     s_rx_pcm = NULL;
+    if (!s_speech_enabled) {
+        return; /* voice turned off on the device; the bridge stops sending once it hears */
+    }
     if (bytes == 0 || bytes > SPEECH_MAX_BYTES || (bytes & 1)) {
         ESP_LOGW(TAG, "Rejected speech clip of %u bytes", (unsigned)bytes);
         return;

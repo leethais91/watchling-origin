@@ -1,0 +1,15 @@
+Use your image generation tool to create 5 UI mockup images (separate files in the current directory, each 1024x1024 PNG). Do not write code; only generate images.
+
+Device context: a small round 360x360 px touchscreen (circular glass, everything outside the circle is pure black) on a cute desk robot gadget. The attached reference-dashboard.png is the CURRENT home screen: dark navy background (#0B0F19), neon HUD rim (thin cyan ring with tick marks), orange Claude usage arc on the left, teal Codex arc on the right, white robot head in the middle, bold white clock at top, Montserrat-style bold sans + JetBrains Mono for small text. Every mockup must keep this exact visual language (dark, neon cyan rim, glowing accents, rounded shapes, big touch targets ≥ 48 px on a 360 px screen, nothing important near the outer 20 px since the glass curves). Show each screen as a flat front-on screen render, the circle filling the canvas, black outside the circle. No hands, no device photo, no extra text outside the circle.
+
+We are adding a SETTINGS screen reached by swiping, and must prevent accidental opening (the home screen has no buttons; taps on it just poke the robot). Mockups:
+
+1. flow-1-handle.png — Home screen (as in the reference) with one subtle addition: a small rounded "grabber" pill at the very top-center just inside the rim plus a tiny gear glyph under it, hinting "pull down from the top edge". Everything else unchanged.
+
+2. flow-2-pulling.png — Same home screen mid-gesture: the user is dragging down from the top edge. The dashboard dims and blurs slightly, a translucent dark panel with the gear icon is sliding down from the top, and a circular progress ring around the gear is ~60% filled with the text "Keep pulling" in small mono font. Shows the pull must pass a threshold (about half the screen) or it springs back.
+
+3. flow-3-hold.png — Alternative guard: a centered gear button with a ring filling clockwise and the text "Hold to open settings" (press-and-hold 0.8 s after the swipe), dashboard dimmed behind.
+
+4. settings-a-arcs.png — Settings screen, design A "arc dials": title "Settings" small at top with gear icon; brightness as a thick arc slider along the LEFT edge (sun icon, value "70%"), volume as a thick arc slider along the RIGHT edge (speaker icon, value "60%"), mirroring the usage arcs on home; in the center a big pill toggle "Voice (TTS)" shown ON with a glowing cyan knob and a small speech-bubble icon; at the bottom a hint "Swipe up to close" with a small up chevron.
+
+5. settings-b-rows.png — Settings screen, design B "stacked rows": three large rounded rows stacked vertically in the middle of the circle: row 1 sun icon + horizontal slider brightness 70%, row 2 speaker icon + horizontal slider volume 60%, row 3 speech-bubble icon + "Voice (TTS)" with an ON toggle switch. Small "Settings" title at top, round "Done" check button at the bottom center.

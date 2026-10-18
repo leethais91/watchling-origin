@@ -21,11 +21,15 @@
 #include "battery.h"
 #include "ble_link.h"
 #include "host_link.h"
+#include "settings_store.h"
 #include "ui.h"
 
 static const char *TAG = "app";
 
 #define BATTERY_POLL_US  (30 * 1000 * 1000)
+
+/* Written in the LVGL task; the RX task only reads `voice` for the hello reply. */
+static settings_values_t s_settings;
 
 /* esp_timer task; one short I2C transaction pair every 30 s. */
 static void battery_poll(void *arg)
@@ -62,7 +66,7 @@ static ui_link_state_t link_state(void)
     return (ui_link_state_t){.usb = host_link_alive(HOST_LINK_USB), .ble = host_link_alive(HOST_LINK_BLE)};
 }
 
-/* Bonds live in NVS; a full or older-format partition is wiped (only bonds are lost). */
+/* Bonds and settings live in NVS; a full or older-format partition is wiped. */
 static esp_err_t nvs_start(void)
 {
     esp_err_t err = nvs_flash_init();
@@ -73,11 +77,38 @@ static esp_err_t nvs_start(void)
     return err;
 }
 
+/* `voice` tells the bridge whether to synthesize speech at all. */
 static void send_hello(void)
 {
-    char json[96];
-    snprintf(json, sizeof(json), "{\"t\":\"hello\",\"fw\":\"%s\"}", esp_app_get_description()->version);
+    char json[128];
+    snprintf(json, sizeof(json), "{\"t\":\"hello\",\"fw\":\"%s\",\"voice\":%s}",
+             esp_app_get_description()->version, s_settings.voice ? "true" : "false");
     host_link_send_json(json);
+}
+
+/* LVGL task. Brightness follows the finger; volume changes once it lifts, with a sample chime. */
+static void on_settings(settings_field_t field, const settings_values_t *values, bool final)
+{
+    s_settings = *values;
+    switch (field) {
+    case SETTINGS_FIELD_BRIGHTNESS:
+        bsp_display_brightness_set(values->brightness);
+        break;
+    case SETTINGS_FIELD_VOLUME:
+        if (final) {
+            audio_set_volume(values->volume);
+            audio_play_chime(AUDIO_CHIME_DONE);
+        }
+        break;
+    case SETTINGS_FIELD_VOICE:
+        audio_set_speech_enabled(values->voice);
+        host_link_send_json(values->voice ? "{\"t\":\"settings\",\"voice\":true}"
+                                          : "{\"t\":\"settings\",\"voice\":false}");
+        break;
+    }
+    if (final) {
+        settings_store_save(values);
+    }
 }
 
 static void on_decision(uint32_t id, bool approve)
@@ -209,21 +240,26 @@ void app_main(void)
      */
     ESP_ERROR_CHECK(bsp_feature_enable(BSP_FEATURE_SPEAKER, true));
 
+    esp_err_t nvs_err = nvs_start();
+    settings_store_load(&s_settings);
+
     /* Display first: it also brings up the shared I2C bus used by touch and the codecs. */
     if (bsp_display_start() == NULL) {
         ESP_LOGE(TAG, "Display init failed");
         return;
     }
-    bsp_display_backlight_on();
-    ui_init(on_decision, link_state);
+    bsp_display_brightness_set(s_settings.brightness);
+    ui_init(on_decision, link_state, &s_settings, on_settings);
     battery_start();
 
+    audio_set_volume(s_settings.volume);
+    audio_set_speech_enabled(s_settings.voice);
     if (audio_init() != ESP_OK) {
         ESP_LOGE(TAG, "Speaker unavailable; continuing without sound");
     }
 
     ESP_ERROR_CHECK(host_link_start(on_host_message, on_host_audio));
-    if (nvs_start() != ESP_OK || ble_link_start(host_link_ble_rx, ui_show_pairing) != ESP_OK) {
+    if (nvs_err != ESP_OK || ble_link_start(host_link_ble_rx, ui_show_pairing) != ESP_OK) {
         ESP_LOGE(TAG, "Bluetooth unavailable; USB only");
     }
     ESP_LOGI(TAG, "Free internal RAM: %u KB (largest block %u KB)",

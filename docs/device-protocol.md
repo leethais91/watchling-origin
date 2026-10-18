@@ -53,7 +53,8 @@ Field `t` is the message type. Percentages are integers 0–100 or `null` when u
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `hello` | `fw` | Firmware version (git describe) |
+| `hello` | `fw`, `voice` | Firmware version (git describe); `voice` = spoken announcements on (missing from older firmware: treat as on) |
+| `settings` | `voice` | User flipped Voice (TTS) on the settings screen. While off, the bridge sends no `say` and the device drops any clip it gets; chimes still play |
 | `pong` | – | Liveness |
 | `confirm_res` | `id`, `action: approve\|deny`, `src: touch\|voice\|tap` | User decision |
 
