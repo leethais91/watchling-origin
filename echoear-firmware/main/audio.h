@@ -1,5 +1,5 @@
 /*
- * Speaker output on the ES8311: short sci-fi sound effects from flash plus speech clips streamed by
+ * Speaker output on the ES8311: short UI sound effects from flash plus speech clips streamed by
  * the bridge (TTS runs on the host). One playback task plays everything in order, so a
  * chime and the phrase that follows it never overlap.
  */
@@ -11,9 +11,10 @@
 #include "esp_err.h"
 
 typedef enum {
-    AUDIO_CHIME_CONFIRM,   /* permission request */
-    AUDIO_CHIME_DONE,      /* task finished */
-    AUDIO_CHIME_ATTENTION, /* waiting for input */
+    AUDIO_CHIME_BOOT,      /* device started */
+    AUDIO_CHIME_WORKING,   /* an agent started a task */
+    AUDIO_CHIME_DONE,      /* task finished; also the volume sample in settings */
+    AUDIO_CHIME_ATTENTION, /* permission request or waiting for input: the user is needed */
     AUDIO_CHIME_ERROR,     /* error */
     AUDIO_CHIME_COUNT,
 } audio_chime_t;

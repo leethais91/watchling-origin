@@ -12,7 +12,8 @@ typedef struct {
     size_t samples;
 } sound_effect_t;
 
-extern const sound_effect_t SFX_CONFIRM;
+extern const sound_effect_t SFX_BOOT;
+extern const sound_effect_t SFX_WORKING;
 extern const sound_effect_t SFX_DONE;
 extern const sound_effect_t SFX_ATTENTION;
 extern const sound_effect_t SFX_ERROR;

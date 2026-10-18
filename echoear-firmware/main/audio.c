@@ -26,7 +26,8 @@ typedef struct {
 } clip_t;
 
 static const sound_effect_t *const CHIME_SOUNDS[AUDIO_CHIME_COUNT] = {
-    [AUDIO_CHIME_CONFIRM] = &SFX_CONFIRM,
+    [AUDIO_CHIME_BOOT] = &SFX_BOOT,
+    [AUDIO_CHIME_WORKING] = &SFX_WORKING,
     [AUDIO_CHIME_DONE] = &SFX_DONE,
     [AUDIO_CHIME_ATTENTION] = &SFX_ATTENTION,
     [AUDIO_CHIME_ERROR] = &SFX_ERROR,

@@ -27,6 +27,8 @@
 static const char *TAG = "app";
 
 #define BATTERY_POLL_US  (30 * 1000 * 1000)
+/* A turn often starts right after another; one "working" sound per spell is enough. */
+#define WORKING_CHIME_COOLDOWN_US (30 * 1000 * 1000)
 
 /* Written in the LVGL task; the RX task only reads `voice` for the hello reply. */
 static settings_values_t s_settings;
@@ -183,7 +185,19 @@ static void handle_confirm_request(const cJSON *msg)
                                                    : UI_RISK_MEDIUM;
     ui_show_confirm((uint32_t)json_int(msg, "id", 0), json_str(msg, "src"), json_str(msg, "tool"),
                     json_str(msg, "summary"), ui_risk);
-    audio_play_chime(AUDIO_CHIME_CONFIRM);
+    audio_play_chime(AUDIO_CHIME_ATTENTION);
+}
+
+static void handle_activity(const cJSON *msg)
+{
+    static int64_t last_chime_us;
+    bool busy = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(msg, "busy"));
+    ui_set_activity(json_str(msg, "src"), busy);
+    int64_t now = esp_timer_get_time();
+    if (busy && (last_chime_us == 0 || now - last_chime_us >= WORKING_CHIME_COOLDOWN_US)) {
+        last_chime_us = now;
+        audio_play_chime(AUDIO_CHIME_WORKING);
+    }
 }
 
 /* Runs on the host link RX task, like the speech begin/end messages. */
@@ -221,7 +235,7 @@ static void on_host_message(const char *json, size_t len)
     } else if (strcmp(type, "say_end") == 0) {
         audio_speech_end((uint16_t)json_int(msg, "id", 0));
     } else if (strcmp(type, "activity") == 0) {
-        ui_set_activity(json_str(msg, "src"), cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(msg, "busy")));
+        handle_activity(msg);
     } else if (strcmp(type, "event") == 0) {
         handle_event(msg);
     } else if (strcmp(type, "confirm_req") == 0) {
@@ -254,7 +268,9 @@ void app_main(void)
 
     audio_set_volume(s_settings.volume);
     audio_set_speech_enabled(s_settings.voice);
-    if (audio_init() != ESP_OK) {
+    if (audio_init() == ESP_OK) {
+        audio_play_chime(AUDIO_CHIME_BOOT);
+    } else {
         ESP_LOGE(TAG, "Speaker unavailable; continuing without sound");
     }
 

@@ -26,14 +26,25 @@ If the board doesn't show up as a USB port, hold **BOOT** while plugging in USB-
 
 ### Sound effects
 
-The four UI sounds (`main/assets/sounds/`, cute-robot style) were generated with the ElevenLabs
-Sound Effects API and are compiled into flash. To make new ones (needs `ELEVENLABS_API_KEY`):
+Five UI sounds (`main/assets/sounds/`, "premium AI companion" style: warm glass-like synth notes)
+were generated with the ElevenLabs Sound Effects API and are compiled into flash. They share a
+note motif so you can tell them apart without looking:
+
+| Sound | Motif | Plays when |
+|---|---|---|
+| `boot` | soft sweep, three rising notes | the device starts |
+| `working` | three quiet pulses | an agent starts a task (at most once per 30 s) |
+| `done` | three rising notes that resolve | a task finishes; also the volume sample in settings |
+| `attention` | two rising notes, left hanging | a permission request, or an agent waiting for input |
+| `error` | two falling notes | an API error |
+
+Loudest to quietest: attention, done, error, boot, working. To make new ones (needs `ELEVENLABS_API_KEY`):
 
 ```sh
 cd echoear-firmware
-python3 tools/sound_effects.py generate --style robot      # or scifi; see STYLES in the script
+python3 tools/sound_effects.py generate --style premium    # 4 variants each; see STYLES in the script
 open tools/sfx-candidates/index.html                       # listen and pick
-python3 tools/sound_effects.py embed confirm=robot:2 done=robot:1 attention=robot:1 error=robot:1
+python3 tools/sound_effects.py embed boot=premium:2 working=premium:2 done=premium:2 attention=premium:2 error=premium:2
 ```
 
 ### Robot face
