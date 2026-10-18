@@ -7,6 +7,7 @@ Build the firmware for ESP-VoCat V1.2, connect it to a Mac, and enable the agent
 - ESP-VoCat V1.2 and a USB-C cable that carries data; see [hardware](hardware.md).
 - macOS, Node.js 22 and npm. The bridge is not supported as a complete installation on Linux or Windows.
 - An installed ESP-IDF **5.5** environment with the ESP32-S3 toolchain. Follow [Espressif's macOS setup instructions](https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32s3/get-started/linux-macos-setup.html), including `./install.sh esp32s3`; the helper below loads an existing installation. Keep the SDK and project paths free of spaces, as required by the ESP-IDF build system.
+- Python 3.12 for ESP-IDF (it supports 3.9–3.13; newer Homebrew Pythons break its setup). `scripts/idf-env.sh` finds it with [uv](https://docs.astral.sh/uv/) (`uv python install 3.12`) or as `python3.12` on `PATH` and puts it first on `PATH` as `python3` before loading ESP-IDF, whatever your default `python3` is. Set `WATCHLING_IDF_PYTHON` to pick another supported version. ESP-IDF keeps one Python environment per version, so run `install.sh` with that same interpreter first on `PATH` (for example, in a shell that already sourced the helper).
 - Claude Code terminal sessions or Codex CLI. Codex permission integration requires a version with `PermissionRequest` hooks (the project targets 0.162+); the integration depends on the agent's hook and session formats.
 
 No audio service API keys are needed for setup or everyday use.
