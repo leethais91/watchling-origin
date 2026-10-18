@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "lvgl.h"
 
@@ -14,11 +15,12 @@ typedef enum {
     /* Base moods: what the robot does when nothing new happened. */
     ROBOT_MOOD_IDLE,  /* random blinks and the odd glance */
     ROBOT_MOOD_BUSY,  /* an agent is working: eyes sweep side to side */
-    ROBOT_MOOD_SLEEP, /* no bridge: eyes shut, head still */
+    ROBOT_MOOD_SLEEP, /* no bridge or dozing: eyes shut, head still, "Zz" drifting up */
     /* Reactions to agent events. */
     ROBOT_MOOD_HAPPY,     /* task finished */
     ROBOT_MOOD_ATTENTION, /* waiting for the user */
     ROBOT_MOOD_ERROR,
+    ROBOT_MOOD_SURPRISED, /* poked: wide round eyes and a hop */
 } robot_mood_t;
 
 /* Where the robot looks while reacting: Claude's arc is on the left, Codex's on the right. */
@@ -36,3 +38,9 @@ void robot_face_set_base(robot_mood_t mood);
 
 /* Shows a reaction for `hold_ms` (0 = until the next reaction or base change), then the base. */
 void robot_face_react(robot_mood_t mood, robot_look_t look, uint32_t hold_ms);
+
+/*
+ * Fullscreen: drops the helmet and draws the eyes 3x larger, centred on the parent, so the
+ * round glass itself becomes the visor. Off puts the head back where it was created.
+ */
+void robot_face_set_fullscreen(bool on);

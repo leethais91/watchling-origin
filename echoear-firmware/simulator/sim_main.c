@@ -6,7 +6,8 @@
  *   --unknown                         every value unknown, as at boot before the bridge reports
  *   --confirm                         firmware UI (ui.c) with the permission modal open
  *   --pairing                         firmware UI with the Bluetooth passkey screen
- *   --mood NAME                       robot mood: idle busy sleep happy attention error
+ *   --mood NAME                       robot mood: idle busy sleep happy attention error surprised
+ *   --face                            fullscreen face mode (the dashboard after 30 s of quiet)
  *   --after-ms N                      with --shot: let animations run N ms before capturing
  */
 #include <stdio.h>
@@ -31,6 +32,7 @@ static const char *const MOOD_NAMES[] = {
     [ROBOT_MOOD_IDLE] = "idle",       [ROBOT_MOOD_BUSY] = "busy",
     [ROBOT_MOOD_SLEEP] = "sleep",     [ROBOT_MOOD_HAPPY] = "happy",
     [ROBOT_MOOD_ATTENTION] = "attention", [ROBOT_MOOD_ERROR] = "error",
+    [ROBOT_MOOD_SURPRISED] = "surprised",
 };
 #define MOOD_COUNT ((int)(sizeof(MOOD_NAMES) / sizeof(MOOD_NAMES[0])))
 
@@ -132,6 +134,7 @@ int main(int argc, char **argv)
     bool unknown = false;
     bool confirm = false;
     bool pairing = false;
+    bool face = false;
     uint32_t after_ms = 0;
     int mood = -1;
     for (int i = 1; i < argc; i++) {
@@ -145,12 +148,14 @@ int main(int argc, char **argv)
             confirm = true;
         } else if (strcmp(argv[i], "--pairing") == 0) {
             pairing = true;
+        } else if (strcmp(argv[i], "--face") == 0) {
+            face = true;
         } else if (strcmp(argv[i], "--mood") == 0 && i + 1 < argc && (mood = mood_from_name(argv[++i])) >= 0) {
             continue;
         } else if (strcmp(argv[i], "--after-ms") == 0 && i + 1 < argc) {
             after_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
         } else {
-            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown | --confirm | --pairing] [--mood NAME]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown | --confirm | --pairing] [--mood NAME] [--face]\n", argv[0]);
             return 2;
         }
     }
@@ -211,6 +216,7 @@ int main(int argc, char **argv)
         };
     }
     agent_dashboard_update(&data);
+    agent_dashboard_set_face_mode(face);
 
     if (mood >= 0) {
         mood_show((robot_mood_t)mood);

@@ -71,6 +71,8 @@ typedef struct {
     lv_obj_t *weekly;
 } usage_side_t;
 
+/* Everything but the rim and the robot, so face mode can hide it in one go. */
+static lv_obj_t *s_info;
 static usage_side_t s_claude;
 static usage_side_t s_codex;
 static lv_obj_t *s_time;
@@ -273,26 +275,33 @@ lv_obj_t *agent_dashboard_create(lv_obj_t *parent)
     rim_create(root, RIM_GLOW_DIAMETER, RIM_GLOW_WIDTH, RIM_GLOW_OPA);
     rim_create(root, RIM_DIAMETER, RIM_WIDTH, RIM_OPA);
 
-    usage_side_create(&s_claude, root, CLAUDE_ARC_START, CLAUDE_ARC_END, COLOR_CLAUDE, COLOR_CLAUDE_HI,
+    s_info = lv_obj_create(root);
+    lv_obj_remove_style_all(s_info);
+    lv_obj_set_size(s_info, lv_pct(100), lv_pct(100));
+    lv_obj_center(s_info);
+    lv_obj_set_scrollable(s_info, false);
+
+    usage_side_create(&s_claude, s_info, CLAUDE_ARC_START, CLAUDE_ARC_END, COLOR_CLAUDE, COLOR_CLAUDE_HI,
                       -SIDE_X, "Claude");
-    usage_side_create(&s_codex, root, CODEX_ARC_START, CODEX_ARC_END, COLOR_CODEX, COLOR_CODEX_HI,
+    usage_side_create(&s_codex, s_info, CODEX_ARC_START, CODEX_ARC_END, COLOR_CODEX, COLOR_CODEX_HI,
                       SIDE_X, "Codex");
 
-    s_time = label_create(root, &font_dash_bold_30, COLOR_TEXT_PRIMARY, 0, TIME_Y, "--:--");
-    s_date = label_create(root, &lv_font_montserrat_16, COLOR_TEXT_SOFT, 0, DATE_Y, "");
-    status_icons_create(root);
+    s_time = label_create(s_info, &font_dash_bold_30, COLOR_TEXT_PRIMARY, 0, TIME_Y, "--:--");
+    s_date = label_create(s_info, &lv_font_montserrat_16, COLOR_TEXT_SOFT, 0, DATE_Y, "");
+    status_icons_create(s_info);
 
-    robot_face_create(root, 0, ROBOT_Y);
-
-    s_cost = label_create(root, &font_dash_bold_30, COLOR_TEXT_PRIMARY, 0, COST_Y, "$--");
-    label_create(root, &lv_font_montserrat_14, COLOR_TEXT_SOFT, 0, COST_CAPTION_Y, "Today");
+    s_cost = label_create(s_info, &font_dash_bold_30, COLOR_TEXT_PRIMARY, 0, COST_Y, "$--");
+    label_create(s_info, &lv_font_montserrat_14, COLOR_TEXT_SOFT, 0, COST_CAPTION_Y, "Today");
 
     /* Agent text: monospace, and the only dashboard font with Vietnamese glyphs. */
-    s_status = label_create(root, &font_mono_15, COLOR_TEXT_STATUS, 0, STATUS_Y, "");
+    s_status = label_create(s_info, &font_mono_15, COLOR_TEXT_STATUS, 0, STATUS_Y, "");
     lv_obj_set_width(s_status, STATUS_W);
     lv_label_set_long_mode(s_status, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_height(s_status, lv_font_get_line_height(&font_mono_15));
     lv_obj_align(s_status, LV_ALIGN_CENTER, 0, STATUS_Y);
+
+    /* Last, so the big face mode eyes draw above everything else. */
+    robot_face_create(root, 0, ROBOT_Y);
 
     return root;
 }
@@ -326,4 +335,10 @@ void agent_dashboard_update(const agent_dashboard_data_t *data)
 
     label_set_text_if_changed(s_status, data->status_text);
     text_color_set_if_changed(s_status, tone_colors[data->status_tone]);
+}
+
+void agent_dashboard_set_face_mode(bool on)
+{
+    lv_obj_set_hidden(s_info, on);
+    robot_face_set_fullscreen(on);
 }

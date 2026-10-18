@@ -8,11 +8,17 @@
  * top of it. Pill eyes cover most moods; "happy" swaps them for ^ ^ arcs and "error" for
  * x x crosses. Everything moves with small objects so each animation frame only redraws
  * the eyes, apart from the slow head bob (a few px, a handful of redraws per second).
+ *
+ * Fullscreen hides the helmet and multiplies every eye size, offset and motion by
+ * FULL_SCALE instead of zooming a layer, so the big eyes stay crisp and cheap to redraw.
  */
 
 /* Visor centre in robot_head.png pixels; eye positions are relative to the head image. */
 #define VISOR_CX         82
 #define VISOR_CY         78
+#define FULL_SCALE       3
+#define FULL_HEAD_PX     360 /* the head box in fullscreen: the whole panel */
+#define FULL_GLOW_W      24  /* a 3x glow costs a lot of shadow rendering; less reads as well */
 #define EYE_DX           24 /* each eye sits this far left/right of the visor centre */
 #define EYE_GLOW_W       14
 #define EYE_CLOSED_H     2
@@ -46,6 +52,14 @@
 #define SHAKE_PX         4
 #define SHAKE_MS         45
 #define SHAKE_SWINGS     3
+/* Sleep: "Zz" above the right eye drifts up and fades, over and over. */
+#define ZZZ_DX           2
+#define ZZZ_DY           22
+#define ZZZ_RISE_PX      6
+#define ZZZ_MS           1800
+
+/* Every geometry constant above is in small-head pixels; S() scales it to the current mode. */
+#define S(px)            ((px) * s_scale)
 
 typedef struct {
     int32_t w; /* pill eye size; w == 0 means the mood draws arcs or crosses instead */
@@ -63,11 +77,7 @@ static const mood_style_t MOODS[] = {
     [ROBOT_MOOD_HAPPY] = {0, 0, COLOR_HAPPY, LV_OPA_TRANSP, false, true},
     [ROBOT_MOOD_ATTENTION] = {26, 34, COLOR_ATTENTION, LV_OPA_60, true, true},
     [ROBOT_MOOD_ERROR] = {0, 0, COLOR_ERROR, LV_OPA_TRANSP, false, true},
-};
-
-static const lv_point_precise_t CROSS_POINTS[2][2] = {
-    {{0, 0}, {SHAPE_PX, SHAPE_PX}},
-    {{SHAPE_PX, 0}, {0, SHAPE_PX}},
+    [ROBOT_MOOD_SURPRISED] = {30, 30, COLOR_EYE, LV_OPA_COVER, false, true},
 };
 
 static lv_obj_t *s_rig;  /* bounces and shakes */
@@ -75,28 +85,59 @@ static lv_obj_t *s_head; /* bobs inside the rig; parent of the eyes */
 static lv_obj_t *s_pill[2];
 static lv_obj_t *s_arc[2];
 static lv_obj_t *s_cross[2][2];
+static lv_obj_t *s_zzz;
 static lv_timer_t *s_react_timer;
+/* lv_line keeps a pointer to its points, so they live here and are rescaled in place. */
+static lv_point_precise_t s_cross_points[2][2];
 
 static robot_mood_t s_base;
 static robot_mood_t s_mood;
 static int32_t s_gaze;   /* px, positive = looking right */
 static int32_t s_closed; /* lid closure 0..100 while blinking */
+static int32_t s_scale = 1;
+static int32_t s_visor_x = VISOR_CX; /* visor centre inside s_head */
+static int32_t s_visor_y = VISOR_CY;
+static int32_t s_home_x; /* where robot_face_create() put the rig */
+static int32_t s_home_y;
 
 /* ---------- eyes ---------- */
 
 static void eyes_layout(void)
 {
     const mood_style_t *m = &MOODS[s_mood];
-    int32_t h = m->h - (m->h - EYE_CLOSED_H) * s_closed / 100;
+    int32_t w = S(m->w);
+    int32_t h = S(m->h) - (S(m->h) - EYE_CLOSED_H) * s_closed / 100;
+    int32_t shape = S(SHAPE_PX);
     for (int i = 0; i < 2; i++) {
-        int32_t cx = VISOR_CX + (i == 0 ? -EYE_DX : EYE_DX) + s_gaze;
-        lv_obj_set_size(s_pill[i], m->w, h);
-        lv_obj_set_pos(s_pill[i], cx - m->w / 2, VISOR_CY - h / 2);
-        lv_obj_set_pos(s_arc[i], cx - SHAPE_PX / 2, VISOR_CY - SHAPE_PX / 2 + HAPPY_ARC_DY);
+        int32_t cx = s_visor_x + (i == 0 ? -S(EYE_DX) : S(EYE_DX)) + s_gaze;
+        lv_obj_set_size(s_pill[i], w, h);
+        lv_obj_set_pos(s_pill[i], cx - w / 2, s_visor_y - h / 2);
+        lv_obj_set_pos(s_arc[i], cx - shape / 2, s_visor_y - shape / 2 + S(HAPPY_ARC_DY));
         for (int k = 0; k < 2; k++) {
-            lv_obj_set_pos(s_cross[i][k], cx - SHAPE_PX / 2, VISOR_CY - SHAPE_PX / 2);
+            lv_obj_set_pos(s_cross[i][k], cx - shape / 2, s_visor_y - shape / 2);
         }
     }
+    lv_obj_set_pos(s_zzz, s_visor_x + S(EYE_DX + ZZZ_DX), s_visor_y - S(ZZZ_DY));
+}
+
+/* Sizes that only change with the scale: shapes, strokes, glow and the "Zz" font. */
+static void eyes_scale_apply(void)
+{
+    int32_t shape = S(SHAPE_PX);
+    s_cross_points[0][0] = (lv_point_precise_t){0, 0};
+    s_cross_points[0][1] = (lv_point_precise_t){shape, shape};
+    s_cross_points[1][0] = (lv_point_precise_t){shape, 0};
+    s_cross_points[1][1] = (lv_point_precise_t){0, shape};
+    for (int i = 0; i < 2; i++) {
+        lv_obj_set_style_shadow_width(s_pill[i], s_scale > 1 ? FULL_GLOW_W : EYE_GLOW_W, 0);
+        lv_obj_set_size(s_arc[i], shape, shape);
+        lv_obj_set_style_arc_width(s_arc[i], S(STROKE_PX), LV_PART_MAIN);
+        for (int k = 0; k < 2; k++) {
+            lv_line_set_points(s_cross[i][k], s_cross_points[k], 2);
+            lv_obj_set_style_line_width(s_cross[i][k], S(STROKE_PX), 0);
+        }
+    }
+    lv_obj_set_style_text_font(s_zzz, s_scale > 1 ? &lv_font_montserrat_28 : &lv_font_montserrat_14, 0);
 }
 
 static void eyes_style(const mood_style_t *m, robot_mood_t mood)
@@ -115,6 +156,8 @@ static void eyes_style(const mood_style_t *m, robot_mood_t mood)
             lv_obj_set_style_line_color(s_cross[i][k], color, 0);
         }
     }
+    lv_obj_set_hidden(s_zzz, mood != ROBOT_MOOD_SLEEP);
+    lv_obj_set_style_text_color(s_zzz, color, 0);
 }
 
 /* ---------- animations ---------- */
@@ -172,6 +215,14 @@ static void shake_anim_cb(void *var, int32_t value)
     translate_set(s_rig, LV_STYLE_TRANSLATE_X, value);
 }
 
+/* 0..100: the "Zz" rises and fades out, then starts over at the bottom. */
+static void zzz_anim_cb(void *var, int32_t value)
+{
+    LV_UNUSED(var);
+    translate_set(s_zzz, LV_STYLE_TRANSLATE_Y, -S(ZZZ_RISE_PX) * value / 100);
+    lv_obj_set_style_text_opa(s_zzz, (lv_opa_t)(LV_OPA_COVER * (100 - value) / 100), 0);
+}
+
 static void shake_done_cb(lv_anim_t *a)
 {
     LV_UNUSED(a);
@@ -221,7 +272,7 @@ static void glance_timer_cb(lv_timer_t *timer)
         return;
     }
     lv_anim_t a;
-    anim_prepare(&a, gaze_anim_cb, 0, lv_rand(0, 1) ? GAZE_PX : -GAZE_PX, GLANCE_MOVE_MS);
+    anim_prepare(&a, gaze_anim_cb, 0, lv_rand(0, 1) ? S(GAZE_PX) : -S(GAZE_PX), GLANCE_MOVE_MS);
     lv_anim_set_reverse_delay(&a, GLANCE_HOLD_MS);
     lv_anim_set_reverse_duration(&a, GLANCE_MOVE_MS);
     lv_anim_start(&a);
@@ -239,10 +290,11 @@ static void mood_apply(robot_mood_t mood, robot_look_t look)
     lv_anim_delete(s_head, glow_anim_cb);
     lv_anim_delete(s_head, bounce_anim_cb);
     lv_anim_delete(s_head, shake_anim_cb);
+    lv_anim_delete(s_head, zzz_anim_cb);
     translate_set(s_rig, LV_STYLE_TRANSLATE_X, 0);
     translate_set(s_rig, LV_STYLE_TRANSLATE_Y, 0);
     s_closed = 0;
-    s_gaze = look == ROBOT_LOOK_LEFT ? -GAZE_PX : look == ROBOT_LOOK_RIGHT ? GAZE_PX : 0;
+    s_gaze = look == ROBOT_LOOK_LEFT ? -S(GAZE_PX) : look == ROBOT_LOOK_RIGHT ? S(GAZE_PX) : 0;
 
     eyes_style(m, mood);
     eyes_layout();
@@ -251,26 +303,33 @@ static void mood_apply(robot_mood_t mood, robot_look_t look)
         lv_anim_delete(s_head, bob_anim_cb);
         translate_set(s_head, LV_STYLE_TRANSLATE_Y, 0);
     } else if (lv_anim_get(s_head, bob_anim_cb) == NULL) {
-        anim_ping_pong(bob_anim_cb, -BOB_PX, BOB_PX, BOB_MS);
+        anim_ping_pong(bob_anim_cb, -S(BOB_PX), S(BOB_PX), BOB_MS);
     }
 
     lv_anim_t a;
     switch (mood) {
+    case ROBOT_MOOD_SLEEP:
+        anim_prepare(&a, zzz_anim_cb, 0, 100, ZZZ_MS);
+        lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+        lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+        lv_anim_start(&a);
+        break;
     case ROBOT_MOOD_BUSY:
-        anim_ping_pong(gaze_anim_cb, -GAZE_PX, GAZE_PX, SWEEP_MS);
+        anim_ping_pong(gaze_anim_cb, -S(GAZE_PX), S(GAZE_PX), SWEEP_MS);
         break;
     case ROBOT_MOOD_ATTENTION:
         anim_ping_pong(glow_anim_cb, LV_OPA_20, LV_OPA_COVER, PULSE_MS);
         break;
     case ROBOT_MOOD_HAPPY:
-        anim_prepare(&a, bounce_anim_cb, 0, -BOUNCE_PX, BOUNCE_UP_MS);
+    case ROBOT_MOOD_SURPRISED:
+        anim_prepare(&a, bounce_anim_cb, 0, -S(BOUNCE_PX), BOUNCE_UP_MS);
         lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
         lv_anim_set_reverse_duration(&a, BOUNCE_DOWN_MS);
-        lv_anim_set_repeat_count(&a, 2);
+        lv_anim_set_repeat_count(&a, mood == ROBOT_MOOD_HAPPY ? 2 : 1);
         lv_anim_start(&a);
         break;
     case ROBOT_MOOD_ERROR:
-        anim_prepare(&a, shake_anim_cb, -SHAKE_PX, SHAKE_PX, SHAKE_MS);
+        anim_prepare(&a, shake_anim_cb, -S(SHAKE_PX), S(SHAKE_PX), SHAKE_MS);
         lv_anim_set_path_cb(&a, lv_anim_path_linear);
         lv_anim_set_reverse_duration(&a, SHAKE_MS);
         lv_anim_set_repeat_count(&a, SHAKE_SWINGS);
@@ -298,6 +357,8 @@ lv_obj_t *robot_face_create(lv_obj_t *parent, int32_t x, int32_t y)
     lv_obj_set_scrollable(s_rig, false);
     lv_obj_set_overflow_visible(s_rig, true); /* the head bobs past the rig's edge */
     lv_obj_align(s_rig, LV_ALIGN_CENTER, x, y);
+    s_home_x = x;
+    s_home_y = y;
 
     s_head = lv_image_create(s_rig);
     lv_image_set_src(s_head, &img_robot_head);
@@ -307,27 +368,25 @@ lv_obj_t *robot_face_create(lv_obj_t *parent, int32_t x, int32_t y)
         lv_obj_remove_style_all(pill);
         lv_obj_set_style_radius(pill, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(pill, LV_OPA_COVER, 0);
-        lv_obj_set_style_shadow_width(pill, EYE_GLOW_W, 0);
         s_pill[i] = pill;
 
         lv_obj_t *arc = lv_arc_create(s_head);
         lv_obj_remove_style_all(arc);
-        lv_obj_set_size(arc, SHAPE_PX, SHAPE_PX);
         lv_obj_set_clickable(arc, false);
         lv_arc_set_bg_angles(arc, 190, 350);
-        lv_obj_set_style_arc_width(arc, STROKE_PX, LV_PART_MAIN);
         lv_obj_set_style_arc_rounded(arc, true, LV_PART_MAIN);
         lv_obj_set_style_arc_opa(arc, LV_OPA_TRANSP, LV_PART_INDICATOR);
         s_arc[i] = arc;
 
         for (int k = 0; k < 2; k++) {
             lv_obj_t *line = lv_line_create(s_head);
-            lv_line_set_points(line, CROSS_POINTS[k], 2);
-            lv_obj_set_style_line_width(line, STROKE_PX, 0);
             lv_obj_set_style_line_rounded(line, true, 0);
             s_cross[i][k] = line;
         }
     }
+    s_zzz = lv_label_create(s_head);
+    lv_label_set_text(s_zzz, "Zz");
+    eyes_scale_apply();
 
     lv_timer_create(blink_timer_cb, BLINK_MIN_MS, NULL);
     lv_timer_create(glance_timer_cb, GLANCE_MIN_MS, NULL);
@@ -358,4 +417,29 @@ void robot_face_react(robot_mood_t mood, robot_look_t look, uint32_t hold_ms)
         lv_timer_reset(s_react_timer);
         lv_timer_resume(s_react_timer);
     }
+}
+
+void robot_face_set_fullscreen(bool on)
+{
+    if ((s_scale > 1) == on) {
+        return;
+    }
+    s_scale = on ? FULL_SCALE : 1;
+    if (on) {
+        lv_image_set_src(s_head, NULL);
+        lv_obj_set_size(s_head, FULL_HEAD_PX, FULL_HEAD_PX);
+        s_visor_x = FULL_HEAD_PX / 2;
+        s_visor_y = FULL_HEAD_PX / 2;
+    } else {
+        lv_image_set_src(s_head, &img_robot_head);
+        lv_obj_set_size(s_head, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        s_visor_x = VISOR_CX;
+        s_visor_y = VISOR_CY;
+    }
+    lv_obj_align(s_rig, LV_ALIGN_CENTER, on ? 0 : s_home_x, on ? 0 : s_home_y);
+    eyes_scale_apply();
+    /* Restart the current mood so every running motion picks up the new amplitude. */
+    lv_anim_delete(s_head, bob_anim_cb);
+    translate_set(s_head, LV_STYLE_TRANSLATE_Y, 0);
+    mood_apply(s_mood, ROBOT_LOOK_CENTER);
 }

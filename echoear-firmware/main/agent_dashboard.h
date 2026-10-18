@@ -49,3 +49,6 @@ lv_obj_t *agent_dashboard_create(lv_obj_t *parent);
 
 /* Applies `data`; only widgets whose value changed are invalidated. */
 void agent_dashboard_update(const agent_dashboard_data_t *data);
+
+/* Face mode: hides everything but the neon rim and shows the robot's eyes fullscreen. */
+void agent_dashboard_set_face_mode(bool on);

@@ -46,6 +46,14 @@
 #define HAPPY_MS          4000
 #define ERROR_MS          6000
 #define ATTENTION_MS      (2 * 60 * 1000)
+/*
+ * Quiet time before the dashboard gives way to the fullscreen face, and before the robot
+ * dozes off. Only agent events, requests and touches count: usage and clock frames
+ * arrive on their own all the time.
+ */
+#define FACE_IDLE_MS      (30 * 1000)
+#define DOZE_IDLE_MS      (5 * 60 * 1000)
+#define SURPRISED_MS      1200
 
 enum { AGENT_CLAUDE, AGENT_CODEX, AGENT_COUNT };
 
@@ -62,6 +70,10 @@ static uint32_t s_busy_since[AGENT_COUNT];
 /* Bridge answering on USB or BLE; asleep otherwise. */
 static bool s_bridge_linked;
 
+/* lv_tick of the latest agent event, request or touch. */
+static uint32_t s_last_activity;
+static bool s_face_mode;
+
 static lv_obj_t *s_pairing;
 static lv_obj_t *s_pairing_code;
 
@@ -71,6 +83,46 @@ static lv_obj_t *s_modal_tool;
 static lv_obj_t *s_modal_summary;
 static uint32_t s_modal_id;
 static bool s_modal_visible;
+
+static void robot_base_update(void);
+
+/* ---------- face mode ---------- */
+
+static void face_mode_set(bool on)
+{
+    if (on != s_face_mode) {
+        s_face_mode = on;
+        agent_dashboard_set_face_mode(on);
+    }
+}
+
+/* Something happened: back to the dashboard, and the idle clock starts over. */
+static void activity_note(void)
+{
+    s_last_activity = lv_tick_get();
+    face_mode_set(false);
+}
+
+static void poke_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    activity_note();
+    robot_base_update(); /* wakes a dozing robot first; a base change ends any reaction */
+    robot_face_react(ROBOT_MOOD_SURPRISED, ROBOT_LOOK_CENTER, SURPRISED_MS);
+}
+
+/*
+ * The dashboard has nothing to tap, so one invisible layer takes every touch that the
+ * modal and pairing screens (created later, on top of it) do not.
+ */
+static void touch_catcher_create(void)
+{
+    lv_obj_t *catcher = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(catcher);
+    lv_obj_set_size(catcher, BSP_LCD_H_RES, BSP_LCD_V_RES);
+    lv_obj_center(catcher);
+    lv_obj_add_event_cb(catcher, poke_cb, LV_EVENT_PRESSED, NULL);
+}
 
 /* ---------- confirm modal ---------- */
 
@@ -94,6 +146,7 @@ static void decision_button_cb(lv_event_t *e)
     bool approve = (bool)(intptr_t)lv_event_get_user_data(e);
     uint32_t id = s_modal_id;
     modal_hide();
+    activity_note();
     s_on_decision(id, approve);
 }
 
@@ -256,7 +309,10 @@ static int agent_index(const char *source)
     return strcmp(source, "codex") == 0 ? AGENT_CODEX : AGENT_CLAUDE;
 }
 
-/* Base mood: asleep without the bridge, scanning while any agent works, idle otherwise. */
+/*
+ * Base mood: asleep without the bridge, scanning while any agent works, dozing after a
+ * long quiet spell, idle otherwise.
+ */
 static void robot_base_update(void)
 {
     bool busy = false;
@@ -266,7 +322,11 @@ static void robot_base_update(void)
         }
         busy |= s_busy_since[i] != 0;
     }
-    robot_face_set_base(!s_bridge_linked ? ROBOT_MOOD_SLEEP : busy ? ROBOT_MOOD_BUSY : ROBOT_MOOD_IDLE);
+    bool dozing = lv_tick_elaps(s_last_activity) >= DOZE_IDLE_MS;
+    robot_face_set_base(!s_bridge_linked ? ROBOT_MOOD_SLEEP
+                        : busy           ? ROBOT_MOOD_BUSY
+                        : dozing         ? ROBOT_MOOD_SLEEP
+                                         : ROBOT_MOOD_IDLE);
 }
 
 /* Runs every second in the LVGL task; the dashboard only redraws what changed. */
@@ -284,6 +344,10 @@ static void status_timer_cb(lv_timer_t *timer)
     robot_base_update();
     if (!linked && s_modal_visible) {
         modal_hide(); /* the bridge releases the request to the terminal on its side */
+    }
+    if (!s_face_mode && !s_modal_visible && lv_obj_is_hidden(s_pairing) &&
+        lv_tick_elaps(s_last_activity) >= FACE_IDLE_MS) {
+        face_mode_set(true);
     }
 }
 
@@ -309,7 +373,9 @@ void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe)
         .status_tone = AGENT_DASHBOARD_TONE_NEUTRAL,
     };
     agent_dashboard_update(&s_dash);
+    s_last_activity = lv_tick_get();
     robot_base_update();
+    touch_catcher_create();
     modal_create();
     pairing_create();
     lv_timer_create(status_timer_cb, STATUS_POLL_MS, NULL);
@@ -374,6 +440,7 @@ void ui_show_event(const char *source, ui_event_kind_t kind, const char *text)
     agent_dashboard_update(&s_dash);
     /* Every event ends that agent's turn. Claude's arc is on the left, Codex's on the right. */
     s_busy_since[agent] = 0;
+    activity_note();
     robot_base_update();
     robot_face_react(reactions[kind].mood, agent == AGENT_CODEX ? ROBOT_LOOK_RIGHT : ROBOT_LOOK_LEFT,
                      reactions[kind].hold_ms);
@@ -385,6 +452,7 @@ void ui_set_activity(const char *source, bool busy)
     bsp_display_lock(0);
     /* 0 means idle, so a busy flag set at tick 0 is stored as 1. */
     s_busy_since[agent_index(source)] = busy ? LV_MAX(lv_tick_get(), 1) : 0;
+    activity_note();
     robot_base_update();
     if (busy) {
         /* A new turn replaces any reaction still showing (the base may already be busy). */
@@ -396,6 +464,7 @@ void ui_set_activity(const char *source, bool busy)
 void ui_show_confirm(uint32_t id, const char *source, const char *tool, const char *summary, ui_risk_t risk)
 {
     bsp_display_lock(0);
+    activity_note();
     modal_show(id, agent_index(source) == AGENT_CODEX ? "Codex" : "Claude", tool, summary, risk);
     bsp_display_unlock();
 }
@@ -416,6 +485,7 @@ void ui_show_pairing(bool active, uint32_t passkey)
         char code[8];
         snprintf(code, sizeof(code), "%06lu", (unsigned long)passkey);
         lv_label_set_text(s_pairing_code, code);
+        activity_note();
     }
     lv_obj_set_hidden(s_pairing, !active);
     bsp_display_unlock();
