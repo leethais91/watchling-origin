@@ -98,6 +98,9 @@ How it behaves:
   First time, the device shows a 6-digit code and macOS asks for it; after that it reconnects on
   its own. macOS may ask to allow Bluetooth (for the terminal app with `npm start`). Speech is
   USB-only (chimes still play over BLE). `ECHOEAR_BLE=off` keeps the bridge on USB only.
+- Claude usage and today's cost come from the statusline, which only runs in terminal Claude Code
+  sessions (not the desktop app). The last values are kept in `~/.echoear/usage.json`, so they
+  survive bridge restarts; windows past their reset show 0%, and the cost starts over each day.
 - Codex usage, working and "done" events come from `~/.codex/sessions` with no Codex config.
   Approve/Deny for Codex needs `npm run hooks:install:codex` (Codex hooks, 0.162+); Codex asks you
   to trust the new hook once. The modal is titled with the agent that asks.

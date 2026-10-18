@@ -7,6 +7,8 @@ export const ECHOEAR_DIR = join(homedir(), ".echoear");
 export const SOCKET_PATH = join(ECHOEAR_DIR, "bridge.sock");
 /** Installer state, e.g. the statusline command that was wrapped. */
 export const CONFIG_PATH = join(ECHOEAR_DIR, "config.json");
+/** Last Claude Code usage and today's spend, kept across bridge restarts. */
+export const USAGE_STATE_PATH = join(ECHOEAR_DIR, "usage.json");
 /** Output of the bridge when launchd runs it (see bridge-process.ts). */
 export const BRIDGE_LOG_PATH = join(ECHOEAR_DIR, "bridge.log");
 

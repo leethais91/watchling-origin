@@ -10,7 +10,7 @@
  */
 import { clockMessage } from "./clock/clock-message.js";
 import { startIpcServer } from "./ipc/ipc-server.js";
-import { SOCKET_PATH } from "./ipc/paths.js";
+import { SOCKET_PATH, USAGE_STATE_PATH } from "./ipc/paths.js";
 import { PermissionBroker } from "./permission/permission-broker.js";
 import type { AgentEventMessage, HostMessage } from "./protocol/messages.js";
 import { Speaker } from "./speech/speaker.js";
@@ -36,7 +36,8 @@ const usb = new SerialTransport(process.env.ECHOEAR_PORT);
 const links: { name: string; link: DeviceLink }[] = [{ name: "USB", link: usb }];
 if (process.env.ECHOEAR_BLE !== "off") links.push({ name: "BLE", link: new BleTransport() });
 const transport = new TransportHub(links);
-const usage = new UsageStore();
+const usage = new UsageStore(USAGE_STATE_PATH);
+await usage.restore();
 const tts = createTtsEngine();
 /** Speech clips are raw PCM: USB only. Over BLE the device still chimes. */
 const speechLink = {

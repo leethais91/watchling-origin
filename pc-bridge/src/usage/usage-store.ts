@@ -1,8 +1,12 @@
 /**
  * Latest subscription usage for Claude Code (from the statusline payload) and Codex
  * (from session rollout files), plus today's estimated Claude Code spend.
+ *
+ * The Claude side only arrives while a terminal statusline renders, so it is saved to disk
+ * and restored when the bridge restarts. Codex is re-read from its session files instead.
  */
 import { EventEmitter } from "node:events";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import type { UsageMessage } from "../protocol/messages.js";
 
 interface UsageWindow {
@@ -32,12 +36,57 @@ export interface CodexRateLimits {
   secondary?: { used_percent?: number; resets_at?: number } | null;
 }
 
+/** What `statePath` holds. */
+interface SavedClaudeUsage {
+  claude: AgentWindows;
+  costDay: string;
+  sessionCosts: Record<string, number>;
+}
+
+/** Statuslines render every few seconds; one write per burst is enough. */
+const SAVE_DELAY_MS = 1000;
+
 export class UsageStore extends EventEmitter<{ change: [] }> {
-  private readonly claude: AgentWindows = { h5: null, d7: null };
+  private claude: AgentWindows = { h5: null, d7: null };
   private readonly codex: AgentWindows = { h5: null, d7: null };
   /** Latest cumulative cost per Claude Code session seen today. */
   private readonly sessionCosts = new Map<string, number>();
   private costDay = localDayKey();
+  private saveTimer: NodeJS.Timeout | null = null;
+
+  /** Without `statePath` nothing is saved or restored. */
+  constructor(private readonly statePath?: string) {
+    super();
+  }
+
+  /** Loads the saved Claude usage; a missing or unreadable file leaves the store empty. */
+  async restore(): Promise<void> {
+    if (!this.statePath) return;
+    const saved = await readFile(this.statePath, "utf8")
+      .then((text) => JSON.parse(text) as Partial<SavedClaudeUsage>)
+      .catch(() => null);
+    if (!saved?.claude) return;
+    this.claude = { h5: saved.claude.h5 ?? null, d7: saved.claude.d7 ?? null };
+    // Spend is per day; windows past their reset already read as 0%.
+    if (saved.costDay === this.costDay) {
+      for (const [session, cost] of Object.entries(saved.sessionCosts ?? {})) {
+        if (typeof cost === "number") this.sessionCosts.set(session, cost);
+      }
+    }
+  }
+
+  /** Writes the Claude usage now (atomically, via rename). */
+  async save(): Promise<void> {
+    if (!this.statePath) return;
+    const saved: SavedClaudeUsage = {
+      claude: this.claude,
+      costDay: this.costDay,
+      sessionCosts: Object.fromEntries(this.sessionCosts),
+    };
+    const tmp = `${this.statePath}.tmp`;
+    await writeFile(tmp, JSON.stringify(saved) + "\n", { mode: 0o600 });
+    await rename(tmp, this.statePath);
+  }
 
   updateFromStatusline(input: StatuslineInput): void {
     const limits = input.rate_limits;
@@ -50,6 +99,7 @@ export class UsageStore extends EventEmitter<{ change: [] }> {
       this.rollDay();
       this.sessionCosts.set(input.session_id, cost);
     }
+    this.scheduleSave();
     this.emit("change");
   }
 
@@ -71,6 +121,14 @@ export class UsageStore extends EventEmitter<{ change: [] }> {
       },
       codex: { h5: currentPct(this.codex.h5), d7: currentPct(this.codex.d7) },
     };
+  }
+
+  private scheduleSave(): void {
+    if (!this.statePath) return;
+    this.saveTimer ??= setTimeout(() => {
+      this.saveTimer = null;
+      this.save().catch(() => {}); // a lost write only costs the values on the next restart
+    }, SAVE_DELAY_MS);
   }
 
   private rollDay(): void {
