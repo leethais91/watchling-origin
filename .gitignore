@@ -20,3 +20,7 @@ echoear-firmware/simulator/cmake-out/
 # Sound effect candidates (tools/sound_effects.py generate) and voice auditions (npm run voice:*)
 echoear-firmware/tools/sfx-candidates/
 pc-bridge/voice-candidates/
+
+# Editor and Python caches
+.cache/
+__pycache__/
