@@ -1,6 +1,8 @@
 /**
  * Adds (or removes) the EchoEar hooks and statusline wrapper in ~/.claude/settings.json,
- * or with --codex the permission hook in ~/.codex/hooks.json (same hooks format).
+ * or with --codex the session-start and permission hooks in ~/.codex/hooks.json (same
+ * hooks format). Install also writes the on-demand launchd agent that the SessionStart hooks
+ * start, pinned to the Node running this installer; uninstall (Claude) removes it.
  *
  *   node dist/install-hooks.js install [--codex]     back up the file, add hooks (Claude: wrap statusLine)
  *   node dist/install-hooks.js uninstall [--codex]   remove hooks (Claude: restore the original statusLine)
@@ -8,11 +10,17 @@
  * Idempotent: entries are recognised by the absolute path of this package's dist/ files,
  * and existing hooks from other tools are left untouched.
  */
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CONFIG_PATH, ECHOEAR_DIR, type EchoearConfig } from "./ipc/paths.js";
+import {
+  LAUNCH_AGENT_PATH,
+  launchAgentPlist,
+  loadLaunchAgent,
+  unloadLaunchAgent,
+} from "./ipc/bridge-process.js";
+import { BRIDGE_LOG_PATH, CONFIG_PATH, ECHOEAR_DIR, type EchoearConfig } from "./ipc/paths.js";
 
 const SETTINGS_PATH = join(homedir(), ".claude", "settings.json");
 const CODEX_HOOKS_PATH = join(homedir(), ".codex", "hooks.json");
@@ -47,6 +55,7 @@ const hookCommand = (arg: string, timeout: number): HookCommand => ({
 });
 
 const ECHOEAR_HOOKS: Record<string, HookMatcher> = {
+  SessionStart: { hooks: [hookCommand("session-start", EVENT_HOOK_TIMEOUT_S)] },
   PermissionRequest: { hooks: [hookCommand("permission", PERMISSION_HOOK_TIMEOUT_S)] },
   UserPromptSubmit: { hooks: [hookCommand("prompt", EVENT_HOOK_TIMEOUT_S)] },
   Stop: { hooks: [hookCommand("stop", EVENT_HOOK_TIMEOUT_S)] },
@@ -56,6 +65,7 @@ const ECHOEAR_HOOKS: Record<string, HookMatcher> = {
 
 /** Codex already reports busy/done through its session files; it only needs approvals. */
 const CODEX_HOOKS: Record<string, HookMatcher> = {
+  SessionStart: { hooks: [hookCommand("session-start codex", EVENT_HOOK_TIMEOUT_S)] },
   PermissionRequest: { hooks: [hookCommand("permission codex", PERMISSION_HOOK_TIMEOUT_S)] },
 };
 
@@ -75,6 +85,25 @@ async function readConfig(): Promise<EchoearConfig> {
   return readFile(CONFIG_PATH, "utf8")
     .then((text) => JSON.parse(text) as EchoearConfig)
     .catch(() => ({}));
+}
+
+async function installLaunchAgent(): Promise<void> {
+  const plist = launchAgentPlist({
+    nodePath: process.execPath,
+    script: join(DIST_DIR, "bridge.js"),
+    cwd: dirname(DIST_DIR),
+    logPath: BRIDGE_LOG_PATH,
+  });
+  await mkdir(ECHOEAR_DIR, { recursive: true, mode: 0o700 });
+  await mkdir(dirname(LAUNCH_AGENT_PATH), { recursive: true });
+  await writeFile(LAUNCH_AGENT_PATH, plist);
+  await loadLaunchAgent();
+  console.log(`Bridge launch agent: ${LAUNCH_AGENT_PATH} (Node ${process.version})`);
+}
+
+async function uninstallLaunchAgent(): Promise<void> {
+  await unloadLaunchAgent();
+  await rm(LAUNCH_AGENT_PATH, { force: true });
 }
 
 function addOurHooks(settings: Settings, hooks: Record<string, HookMatcher>): void {
@@ -128,6 +157,9 @@ if (codex) {
 } else {
   await (action === "install" ? install(settings) : uninstall(settings));
 }
+// Codex uninstall keeps the agent: it does nothing unless a remaining hook starts it.
+if (action === "install") await installLaunchAgent();
+else if (!codex) await uninstallLaunchAgent();
 await mkdir(dirname(path), { recursive: true });
 await writeFile(path, JSON.stringify(settings, null, 2) + "\n");
 

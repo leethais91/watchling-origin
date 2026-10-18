@@ -6,13 +6,14 @@
  *   POST /statusline  Claude Code statusline JSON → 204
  *   POST /event       AgentEventMessage without `t` → 204
  *   POST /activity    AgentActivityMessage without `t` → 204
+ *   POST /shutdown    {} → 204, then the bridge exits (frees the serial port for flashing)
  */
 import { chmod, mkdir, unlink } from "node:fs/promises";
-import { connect } from "node:net";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AgentActivityMessage, AgentEventMessage, Decision } from "../protocol/messages.js";
 import type { PermissionInput } from "../permission/permission-summary.js";
 import type { StatuslineInput } from "../usage/usage-store.js";
+import { isBridgeRunning } from "./bridge-process.js";
 import { ECHOEAR_DIR, SOCKET_PATH } from "./paths.js";
 
 /** Write tool payloads carry whole files; allow generous bodies. */
@@ -27,13 +28,11 @@ export interface IpcHandlers {
   statusline: (input: StatuslineInput) => void;
   event: (event: Omit<AgentEventMessage, "t">) => void;
   activity: (activity: Omit<AgentActivityMessage, "t">) => void;
+  shutdown: () => void;
 }
 
 export async function startIpcServer(handlers: IpcHandlers): Promise<Server> {
   await mkdir(ECHOEAR_DIR, { recursive: true, mode: 0o700 });
-  if (await isSocketLive()) throw new Error(`another bridge is already listening on ${SOCKET_PATH}`);
-  await unlink(SOCKET_PATH).catch(() => {});
-
   const server = createServer(async (req, res) => {
     let body: unknown;
     try {
@@ -68,6 +67,9 @@ export async function startIpcServer(handlers: IpcHandlers): Promise<Server> {
         handlers.activity(body as Omit<AgentActivityMessage, "t">);
         res.writeHead(204).end();
         return;
+      case "/shutdown":
+        res.writeHead(204).end(() => handlers.shutdown());
+        return;
       default:
         res.writeHead(404).end();
     }
@@ -75,22 +77,31 @@ export async function startIpcServer(handlers: IpcHandlers): Promise<Server> {
   // Permission requests can legitimately wait minutes for a tap.
   server.requestTimeout = 0;
 
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(SOCKET_PATH, resolve);
-  });
+  // Bind before touching an existing socket file: when two sessions start a bridge at
+  // once, the loser sees EADDRINUSE on a live socket instead of unlinking the winner's.
+  try {
+    await listen(server);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EADDRINUSE") throw err;
+    if (await isBridgeRunning()) throw new Error(`another bridge is already listening on ${SOCKET_PATH}`);
+    await unlink(SOCKET_PATH).catch(() => {}); // left behind by a bridge that crashed
+    await listen(server).catch((retryErr: NodeJS.ErrnoException) => {
+      if (retryErr.code !== "EADDRINUSE") throw retryErr;
+      throw new Error(`another bridge started at the same time on ${SOCKET_PATH}`);
+    });
+  }
   await chmod(SOCKET_PATH, 0o600);
   return server;
 }
 
-function isSocketLive(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = connect(SOCKET_PATH);
-    socket.once("connect", () => {
-      socket.destroy();
-      resolve(true);
+function listen(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onError = (err: Error) => reject(err);
+    server.once("error", onError);
+    server.listen(SOCKET_PATH, () => {
+      server.off("error", onError);
+      resolve();
     });
-    socket.once("error", () => resolve(false));
   });
 }
 

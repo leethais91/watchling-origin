@@ -71,23 +71,32 @@ cd pc-bridge
 nvm use                         # Node 22
 npm install && npm run build
 npm run list-ports              # Espressif device is marked with *
-npm start                       # bridge daemon; keep it running
 npm run hooks:install           # adds hooks + statusline wrapper to ~/.claude/settings.json (backed up)
-npm run hooks:uninstall         # removes them and restores the original statusline
-npm run hooks:install:codex     # adds the permission hook to ~/.codex/hooks.json (backed up)
-npm run hooks:uninstall:codex   # removes it
+                                #   and the bridge launch agent; run it with Node 22
+npm run hooks:uninstall         # removes them, the launch agent, and restores the original statusline
+npm run hooks:install:codex     # adds the session-start + permission hooks to ~/.codex/hooks.json
+npm run hooks:uninstall:codex   # removes them
+npm run bridge:stop             # stop the bridge, e.g. to free the USB port for idf.py flash
+npm start                       # or run the bridge by hand in a terminal (logs to stdout)
 npm test
 ```
 
 How it behaves:
 
+- The bridge starts on its own when a Claude Code or Codex session starts (`SessionStart` hook)
+  and keeps running after the session ends. It runs as an on-demand launchd agent
+  (`~/Library/LaunchAgents/com.echoear.bridge.plist`, not started at login, not restarted after
+  `bridge:stop`) and logs to `~/.echoear/bridge.log`. launchd, not a child of the hook, because
+  macOS kills a process started by Claude Code as soon as it touches Bluetooth. It does not see
+  your shell's environment: set `ECHOEAR_*` variables with `launchctl setenv`, or use `npm start`.
+  Re-run `npm run hooks:install` after switching Node versions or moving the repo.
 - Permission requests appear on the device only while the bridge runs and the device answers
   pings. Otherwise Claude Code shows its normal terminal prompt immediately.
 - While a request is on the device, the Claude Code terminal waits (spinner). Unanswered
   requests fall back to the terminal after `ECHOEAR_CONFIRM_TIMEOUT_S` (default 120).
 - Bluetooth: the bridge also connects over BLE and uses it when the USB cable is out (battery).
   First time, the device shows a 6-digit code and macOS asks for it; after that it reconnects on
-  its own. macOS asks to allow Bluetooth for the terminal app running the bridge. Speech is
+  its own. macOS may ask to allow Bluetooth (for the terminal app with `npm start`). Speech is
   USB-only (chimes still play over BLE). `ECHOEAR_BLE=off` keeps the bridge on USB only.
 - Codex usage, working and "done" events come from `~/.codex/sessions` with no Codex config.
   Approve/Deny for Codex needs `npm run hooks:install:codex` (Codex hooks, 0.162+); Codex asks you

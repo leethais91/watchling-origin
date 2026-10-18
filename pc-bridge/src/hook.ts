@@ -1,12 +1,14 @@
 /**
- * Hook entry: `node dist/hook.js <permission|prompt|stop|stop-failure|notification> [codex]`
+ * Hook entry: `node dist/hook.js <session-start|permission|prompt|stop|stop-failure|notification> [codex]`
  * with the hook JSON on stdin. Claude Code and Codex send the same payload shape; the
  * optional second argument says which agent runs the hook. Every path exits 0; printing
  * nothing leaves the agent on its normal flow, so a stopped bridge or unplugged device
- * never blocks work.
+ * never blocks work. session-start prints nothing either: Claude Code would add it to the
+ * model's context.
  */
 import type { AgentActivityMessage, AgentEventMessage, AgentSource } from "./protocol/messages.js";
 import type { PermissionResponse } from "./ipc/ipc-server.js";
+import { isBridgeRunning, startBridge } from "./ipc/bridge-process.js";
 import { postToBridge, readStdin } from "./ipc/ipc-client.js";
 
 const EVENT_TIMEOUT_MS = 1000;
@@ -28,6 +30,9 @@ const src: AgentSource = process.argv[3] === "codex" ? "codex" : "claude";
 const input = JSON.parse(await readStdin()) as HookInput;
 
 switch (command) {
+  case "session-start":
+    await ensureBridge();
+    break;
   case "permission":
     await handlePermission(input);
     break;
@@ -47,6 +52,11 @@ switch (command) {
     // Permission prompts arrive through PermissionRequest; only surface idle waits here.
     if (input.notification_type === "idle_prompt") await sendEvent("attention", input.message || "Waiting for input");
     break;
+}
+
+/** Starts the bridge unless one is already running (also by hand); it outlives the session. */
+async function ensureBridge(): Promise<void> {
+  if (!(await isBridgeRunning())) await startBridge();
 }
 
 async function handlePermission(hookInput: HookInput): Promise<void> {

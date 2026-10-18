@@ -1,6 +1,7 @@
 /**
  * Bridge daemon: connects Claude Code hooks/statusline (IPC socket) and Codex session
- * files to the EchoEar device over USB, or BLE when the cable is out.
+ * files to the EchoEar device over USB, or BLE when the cable is out. Started by the
+ * SessionStart hook through launchd (see ipc/bridge-process.ts) or by hand (`npm start`).
  *
  *   ECHOEAR_PORT=/dev/cu.usbmodemXXXX  skip auto-detection
  *   ECHOEAR_BLE=off                    USB only (no Bluetooth permission needed)
@@ -98,6 +99,10 @@ await startIpcServer({
   statusline: (input) => usage.updateFromStatusline(input),
   event: sendEvent,
   activity: (activity) => transport.send({ t: "activity", ...activity }),
+  shutdown: () => {
+    log("stop requested");
+    shutdown();
+  },
 });
 
 await startCodexSessionWatcher({
@@ -116,10 +121,10 @@ setInterval(() => transport.send(clockMessage()), CLOCK_RESYNC_MS).unref();
 transport.start();
 log(`bridge listening on ${SOCKET_PATH}${tts ? "" : " (speech off)"}`);
 
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.on(signal, () => {
-    broker.cancelAll();
-    transport.close();
-    process.exit(0);
-  });
+function shutdown(): never {
+  broker.cancelAll();
+  transport.close();
+  process.exit(0);
 }
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, shutdown);
