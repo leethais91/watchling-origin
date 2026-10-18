@@ -20,8 +20,8 @@
  *   then lvgl/scripts/LVGLImage.py --ofmt C --cf RGB565A8 --name img_robot_head
  * Images: logo_claude.png, logo_codex.png (24x24, alpha): the Claude and OpenAI marks from
  *   @lobehub/icons-static-svg 1.95.1 (MIT; icons/claude.svg, icons/openai.svg), tinted with the
- *   arc colours (Claude #D97757, Codex #10DFA8):
- *     sed 's/currentColor/#D97757/g; s/width="1em"//; s/height="1em"//' claude.svg > tinted.svg
+ *   arc colours (Claude #FF854D, Codex #10DFA8):
+ *     sed 's/currentColor/#FF854D/g; s/width="1em"//; s/height="1em"//' claude.svg > tinted.svg
  *     rsvg-convert -w 24 -h 24 tinted.svg -o logo_claude.png
  *     python3 tools/png_to_lvgl.py main/assets/logo_claude.png img_logo_claude
  */

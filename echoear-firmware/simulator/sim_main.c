@@ -9,6 +9,7 @@
  *   --mood NAME                       robot mood: idle busy sleep happy attention error surprised
  *   --face                            fullscreen face mode (the dashboard after 30 s of quiet)
  *   --after-ms N                      with --shot: let animations run N ms before capturing
+ *                                     (default 700: the usage arcs sweep in over 600 ms)
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +26,7 @@
 #define VER_RES 360
 
 #define MOOD_CYCLE_MS 4000
+#define SHOT_SETTLE_MS 700
 
 static uint16_t s_framebuffer[HOR_RES * VER_RES];
 
@@ -135,7 +137,7 @@ int main(int argc, char **argv)
     bool confirm = false;
     bool pairing = false;
     bool face = false;
-    uint32_t after_ms = 0;
+    uint32_t after_ms = SHOT_SETTLE_MS;
     int mood = -1;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--shot") == 0 && i + 1 < argc) {

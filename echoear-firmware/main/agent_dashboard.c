@@ -1,5 +1,6 @@
 #include "agent_dashboard.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include "assets/dashboard_assets.h"
@@ -13,10 +14,13 @@
 
 #define COLOR_BG             0x0B0F19
 #define COLOR_ARC_TRACK      0x182638
-#define COLOR_CLAUDE         0xD97757
+#define COLOR_CLAUDE         0xFF854D
 #define COLOR_CLAUDE_HI      0xFF9C55
 #define COLOR_CODEX          0x10DFA8
 #define COLOR_CODEX_HI       0x29FFD0
+/* The 2 px line along each gauge's value: a near-white tint of the agent colour. */
+#define COLOR_CLAUDE_GLINT   0xFFD3BD
+#define COLOR_CODEX_GLINT    0xB8FFEB
 #define COLOR_ELECTRIC_BLUE  0x00BFFF
 #define COLOR_GLOW_BLUE      0x167DFF
 #define COLOR_TEXT_PRIMARY   0xF4F7FC
@@ -28,18 +32,41 @@
 #define COLOR_WARN           0xF59E0B
 #define COLOR_DANGER         0xEF4444
 
-/* Arc stack per side: soft glow behind, track + value, thin highlight centred on the value. */
-#define ARC_DIAMETER         320
-#define ARC_WIDTH            16
-#define ARC_GLOW_WIDTH       24
-#define ARC_GLOW_OPA         LV_OPA_40
-#define ARC_HI_WIDTH         10
-#define ARC_HI_OPA           LV_OPA_COVER
+/*
+ * Usage gauge per side, all layers centred on the panel. Radii from the centre, outermost first:
+ *   outline     2 px   r 169..171   decorative, faint
+ *   ticks              r 164..167   15 ticks, one per 1/14 of the span; 0/50/100 % are longer
+ *   track      16 px   r 145..161   dark, the full span (arc diameter 322)
+ *   value      14 px   inset 1 px in the track, rounded ends, a small bright dot at the tip
+ *   glint       2 px   on the value's centre line
+ * Strokes are drawn inward from the arc object's edge, so a layer of width w is centred on the
+ * track by sizing it ARC_DIAMETER - (TRACK_WIDTH - w).
+ */
+#define ARC_DIAMETER         322
+#define TRACK_WIDTH          16
+#define VALUE_WIDTH          14
+#define GLINT_WIDTH          2
+#define GLINT_OPA            LV_OPA_80
+#define TIP_DOT_PX           6
+#define OUTLINE_DIAMETER     342
+#define OUTLINE_WIDTH        2
+#define OUTLINE_OPA          LV_OPA_30
+#define TICK_COUNT           15
+#define TICK_R_INNER         164
+#define TICK_R_MAJOR_INNER   162
+#define TICK_R_OUTER         167
+#define TICK_WIDTH           2
+#define TICK_OPA             LV_OPA_40
+#define TICK_MAJOR_OPA       LV_OPA_80
+/* Values run 0..1000 (per mille) so the 600 ms sweep moves in sub-degree steps. */
+#define ARC_RANGE            1000
+#define ARC_ANIM_MS          600
 /* LVGL angles start at 3 o'clock and grow clockwise: 135..240 is the left edge. */
 #define CLAUDE_ARC_START     135
 #define CLAUDE_ARC_END       240
 #define CODEX_ARC_START      300
 #define CODEX_ARC_END        45
+#define ARC_SPAN             105
 
 /* Neon rim: a crisp ring plus a wider faint one for the glow, just inside the glass. */
 #define RIM_DIAMETER         354
@@ -63,18 +90,37 @@
 #define STATUS_W             184
 #define ICON_GAP             12
 
+/*
+ * Gauge styles are shared lv_style_t, not local styles: every local style property is a small
+ * heap allocation, and LVGL's small allocations land in scarce internal RAM.
+ */
 typedef struct {
-    lv_obj_t *glow;
+    lv_style_t outline_style;
+    lv_style_t value_style;
+    lv_style_t glint_style;
+    lv_style_t tip_style; /* the dot on the value's moving end, attached only while the value is known */
     lv_obj_t *value;
-    lv_obj_t *highlight;
+    lv_obj_t *glint;
     lv_obj_t *percent;
     lv_obj_t *weekly;
+    int target;   /* percent the gauge is heading to, -1 = unknown */
+    int32_t shown; /* per mille the arcs show right now (mid-animation included) */
 } usage_side_t;
+
+/* One tick: a short radial line, precomputed in panel coordinates. */
+typedef struct {
+    lv_point_precise_t a;
+    lv_point_precise_t b;
+    lv_color_t color;
+    lv_opa_t opa;
+} gauge_tick_t;
 
 /* Everything but the rim and the robot, so face mode can hide it in one go. */
 static lv_obj_t *s_info;
 static usage_side_t s_claude;
 static usage_side_t s_codex;
+static lv_style_t s_track_style; /* the same dark track on both sides */
+static gauge_tick_t s_ticks[2 * TICK_COUNT];
 static lv_obj_t *s_time;
 static lv_obj_t *s_date;
 static lv_obj_t *s_wifi;
@@ -114,46 +160,137 @@ static lv_obj_t *label_create(lv_obj_t *parent, const lv_font_t *font, uint32_t 
     return label;
 }
 
-/*
- * One arc layer. Strokes are drawn inward from the object edge, so layers of different
- * widths are centred on each other by growing/shrinking the object by the width delta.
- */
-static lv_obj_t *arc_layer_create(lv_obj_t *parent, int32_t width, uint32_t track_color,
-                                  lv_opa_t track_opa, uint32_t color, lv_opa_t opa, bool reverse)
+/* A rounded stroke. Parts without one draw nothing: arc_width defaults to 0. */
+static void arc_style_init(lv_style_t *style, int32_t width, uint32_t color, lv_opa_t opa)
 {
-    int32_t diameter = ARC_DIAMETER + (width - ARC_WIDTH);
+    lv_style_init(style);
+    lv_style_set_arc_width(style, width);
+    lv_style_set_arc_rounded(style, true);
+    lv_style_set_arc_color(style, lv_color_hex(color));
+    lv_style_set_arc_opa(style, opa);
+}
+
+/* An arc centred on the panel, stroked on `part` (MAIN = the full span, INDICATOR = the value). */
+static lv_obj_t *arc_create(lv_obj_t *parent, int32_t diameter, uint16_t start, uint16_t end, bool reverse,
+                            lv_style_t *style, lv_part_t part)
+{
     lv_obj_t *arc = lv_arc_create(parent);
     lv_obj_remove_style_all(arc);
     lv_obj_set_size(arc, diameter, diameter);
     lv_obj_center(arc);
     lv_obj_set_clickable(arc, false);
     lv_arc_set_mode(arc, reverse ? LV_ARC_MODE_REVERSE : LV_ARC_MODE_NORMAL);
-    lv_arc_set_range(arc, 0, 100);
+    lv_arc_set_range(arc, 0, ARC_RANGE);
+    lv_arc_set_bg_angles(arc, start, end);
     lv_arc_set_value(arc, 0);
-
-    lv_obj_set_style_arc_width(arc, width, LV_PART_MAIN);
-    lv_obj_set_style_arc_rounded(arc, true, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc, lv_color_hex(track_color), LV_PART_MAIN);
-    lv_obj_set_style_arc_opa(arc, track_opa, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(arc, width, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_rounded(arc, true, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_color(arc, lv_color_hex(color), LV_PART_INDICATOR);
-    lv_obj_set_style_arc_opa(arc, opa, LV_PART_INDICATOR);
+    lv_obj_add_style(arc, style, part);
     return arc;
 }
 
+/*
+ * Ticks for one side, bottom (0 %) to top (100 %). Precomputed once with float trig because
+ * the 7.5 deg steps fall between lv_trigo_sin's whole degrees.
+ */
+static void ticks_compute(gauge_tick_t *ticks, int32_t cx, int32_t cy, float start_deg, float step_deg,
+                          uint32_t color)
+{
+    for (int i = 0; i < TICK_COUNT; i++) {
+        bool major = i == 0 || i == TICK_COUNT / 2 || i == TICK_COUNT - 1;
+        float rad = (start_deg + step_deg * (float)i) * (float)M_PI / 180.0f;
+        float c = cosf(rad);
+        float sn = sinf(rad);
+        float r_in = major ? TICK_R_MAJOR_INNER : TICK_R_INNER;
+        ticks[i] = (gauge_tick_t){
+            .a = {cx + (int32_t)lroundf(c * r_in), cy + (int32_t)lroundf(sn * r_in)},
+            .b = {cx + (int32_t)lroundf(c * TICK_R_OUTER), cy + (int32_t)lroundf(sn * TICK_R_OUTER)},
+            .color = lv_color_hex(color),
+            .opa = major ? TICK_MAJOR_OPA : TICK_OPA,
+        };
+    }
+}
+
+/* Draws only the ticks that touch the area being refreshed, so other redraws stay cheap. */
+static void ticks_draw_cb(lv_event_t *e)
+{
+    lv_layer_t *layer = lv_event_get_layer(e);
+    lv_draw_line_dsc_t dsc;
+    lv_draw_line_dsc_init(&dsc);
+    dsc.width = TICK_WIDTH;
+    dsc.round_start = 1;
+    dsc.round_end = 1;
+    for (size_t i = 0; i < sizeof(s_ticks) / sizeof(s_ticks[0]); i++) {
+        const gauge_tick_t *t = &s_ticks[i];
+        const lv_area_t *clip = &layer->_clip_area;
+        if (LV_MAX(t->a.x, t->b.x) + TICK_WIDTH < clip->x1 || LV_MIN(t->a.x, t->b.x) - TICK_WIDTH > clip->x2 ||
+            LV_MAX(t->a.y, t->b.y) + TICK_WIDTH < clip->y1 || LV_MIN(t->a.y, t->b.y) - TICK_WIDTH > clip->y2) {
+            continue;
+        }
+        dsc.p1 = t->a;
+        dsc.p2 = t->b;
+        dsc.color = t->color;
+        dsc.opa = t->opa;
+        lv_draw_line(layer, &dsc);
+    }
+}
+
+/* One object draws both sides' ticks; it never changes, so it never invalidates itself. */
+static void ticks_create(lv_obj_t *parent)
+{
+    lv_obj_t *obj = lv_obj_create(parent);
+    lv_obj_remove_style_all(obj);
+    lv_obj_set_size(obj, lv_pct(100), lv_pct(100));
+    lv_obj_center(obj);
+    lv_obj_set_clickable(obj, false);
+    lv_obj_update_layout(obj);
+    lv_area_t a;
+    lv_obj_get_coords(obj, &a);
+    int32_t cx = a.x1 + lv_area_get_width(&a) / 2;
+    int32_t cy = a.y1 + lv_area_get_height(&a) / 2;
+    float step = (float)ARC_SPAN / (TICK_COUNT - 1);
+    /* Both fill bottom-up: Claude clockwise from 135 deg, Codex counter-clockwise from 45 deg. */
+    ticks_compute(&s_ticks[0], cx, cy, CLAUDE_ARC_START, step, COLOR_CLAUDE);
+    ticks_compute(&s_ticks[TICK_COUNT], cx, cy, CODEX_ARC_END, -step, COLOR_CODEX);
+    lv_obj_add_event_cb(obj, ticks_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
+}
+
+/* Each arc invalidates only the slice between its old and new angle. */
+static void gauge_set(usage_side_t *side, int32_t per_mille)
+{
+    side->shown = per_mille;
+    lv_arc_set_value(side->value, per_mille);
+    lv_arc_set_value(side->glint, per_mille);
+    char text[16];
+    snprintf(text, sizeof(text), "%d%%", (int)((per_mille + 5) / 10));
+    label_set_text_if_changed(side->percent, text);
+}
+
+static void gauge_anim_cb(void *var, int32_t value)
+{
+    gauge_set(var, value);
+}
+
 static void usage_side_create(usage_side_t *side, lv_obj_t *parent, uint16_t start, uint16_t end,
-                              uint32_t color, uint32_t highlight, int32_t label_x, const lv_image_dsc_t *logo)
+                              uint32_t color, uint32_t glint, int32_t label_x, const lv_image_dsc_t *logo)
 {
     /* The right arc runs clockwise from the top, so REVERSE makes both fill bottom-up. */
     bool reverse = start > end;
-    side->glow = arc_layer_create(parent, ARC_GLOW_WIDTH, 0, LV_OPA_TRANSP, color, ARC_GLOW_OPA, reverse);
-    side->value = arc_layer_create(parent, ARC_WIDTH, COLOR_ARC_TRACK, LV_OPA_COVER, color, LV_OPA_COVER, reverse);
-    side->highlight = arc_layer_create(parent, ARC_HI_WIDTH, 0, LV_OPA_TRANSP, highlight, ARC_HI_OPA, reverse);
-    lv_obj_t *arcs[] = {side->glow, side->value, side->highlight};
-    for (size_t i = 0; i < sizeof(arcs) / sizeof(arcs[0]); i++) {
-        lv_arc_set_bg_angles(arcs[i], start, end);
-    }
+
+    arc_style_init(&side->outline_style, OUTLINE_WIDTH, color, OUTLINE_OPA);
+    arc_style_init(&side->value_style, VALUE_WIDTH, color, LV_OPA_COVER);
+    arc_style_init(&side->glint_style, GLINT_WIDTH, glint, GLINT_OPA);
+    /* The knob sits on the moving end; shrunk to a dot inside the stroke it marks the tip. */
+    lv_style_init(&side->tip_style);
+    lv_style_set_radius(&side->tip_style, LV_RADIUS_CIRCLE);
+    lv_style_set_bg_color(&side->tip_style, lv_color_hex(glint));
+    lv_style_set_bg_opa(&side->tip_style, LV_OPA_COVER);
+    lv_style_set_pad_all(&side->tip_style, -(VALUE_WIDTH - TIP_DOT_PX) / 2);
+
+    arc_create(parent, OUTLINE_DIAMETER, start, end, reverse, &side->outline_style, LV_PART_MAIN);
+    arc_create(parent, ARC_DIAMETER, start, end, reverse, &s_track_style, LV_PART_MAIN);
+    side->value = arc_create(parent, ARC_DIAMETER - (TRACK_WIDTH - VALUE_WIDTH), start, end, reverse,
+                             &side->value_style, LV_PART_INDICATOR);
+    side->glint = arc_create(parent, ARC_DIAMETER - (TRACK_WIDTH - GLINT_WIDTH), start, end, reverse,
+                             &side->glint_style, LV_PART_INDICATOR);
 
     side->percent = label_create(parent, &font_dash_bold_20, color, label_x, PERCENT_Y, "--");
     /* The agent's logo, tinted in its arc colour, in place of its name. */
@@ -161,21 +298,39 @@ static void usage_side_create(usage_side_t *side, lv_obj_t *parent, uint16_t sta
     lv_image_set_src(icon, logo);
     lv_obj_align(icon, LV_ALIGN_CENTER, label_x, LOGO_Y);
     side->weekly = label_create(parent, &lv_font_montserrat_14, COLOR_TEXT_SECONDARY, label_x, WEEKLY_Y, "");
+    side->target = -1;
+    side->shown = 0;
 }
 
-static void usage_side_update(const usage_side_t *side, int percent, int weekly)
+/* A new value sweeps the gauge there over ARC_ANIM_MS; repeats of the same value do nothing. */
+static void usage_side_update(usage_side_t *side, int percent, int weekly)
 {
-    int value = percent > 100 ? 100 : percent > 0 ? percent : 0;
-    lv_arc_set_value(side->glow, value);
-    lv_arc_set_value(side->value, value);
-    lv_arc_set_value(side->highlight, value);
-
-    char text[16] = "--";
-    if (percent >= 0) {
-        snprintf(text, sizeof(text), "%d%%", percent);
+    int target = percent < 0 ? -1 : percent > 100 ? 100 : percent;
+    if (target != side->target) {
+        /* A style change redraws the whole arc object, so the tip dot only toggles on unknown <-> known. */
+        if (target < 0 && side->target >= 0) {
+            lv_obj_remove_style(side->value, &side->tip_style, LV_PART_KNOB);
+        } else if (target >= 0 && side->target < 0) {
+            lv_obj_add_style(side->value, &side->tip_style, LV_PART_KNOB);
+        }
+        side->target = target;
+        lv_anim_delete(side, gauge_anim_cb);
+        if (target < 0) {
+            gauge_set(side, 0);
+            label_set_text_if_changed(side->percent, "--");
+        } else {
+            lv_anim_t a;
+            lv_anim_init(&a);
+            lv_anim_set_var(&a, side);
+            lv_anim_set_exec_cb(&a, gauge_anim_cb);
+            lv_anim_set_values(&a, side->shown, target * (ARC_RANGE / 100));
+            lv_anim_set_duration(&a, ARC_ANIM_MS);
+            lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+            lv_anim_start(&a);
+        }
     }
-    label_set_text_if_changed(side->percent, text);
 
+    char text[16];
     lv_obj_set_hidden(side->weekly, weekly < 0);
     if (weekly >= 0) {
         snprintf(text, sizeof(text), "7d %d%%", weekly);
@@ -284,9 +439,11 @@ lv_obj_t *agent_dashboard_create(lv_obj_t *parent)
     lv_obj_center(s_info);
     lv_obj_set_scrollable(s_info, false);
 
-    usage_side_create(&s_claude, s_info, CLAUDE_ARC_START, CLAUDE_ARC_END, COLOR_CLAUDE, COLOR_CLAUDE_HI,
+    arc_style_init(&s_track_style, TRACK_WIDTH, COLOR_ARC_TRACK, LV_OPA_COVER);
+    ticks_create(s_info);
+    usage_side_create(&s_claude, s_info, CLAUDE_ARC_START, CLAUDE_ARC_END, COLOR_CLAUDE, COLOR_CLAUDE_GLINT,
                       -SIDE_X, &img_logo_claude);
-    usage_side_create(&s_codex, s_info, CODEX_ARC_START, CODEX_ARC_END, COLOR_CODEX, COLOR_CODEX_HI,
+    usage_side_create(&s_codex, s_info, CODEX_ARC_START, CODEX_ARC_END, COLOR_CODEX, COLOR_CODEX_GLINT,
                       SIDE_X, &img_logo_codex);
 
     s_time = label_create(s_info, &font_dash_bold_30, COLOR_TEXT_PRIMARY, 0, TIME_Y, "--:--");
