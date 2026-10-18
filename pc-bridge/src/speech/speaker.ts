@@ -27,15 +27,18 @@ export class Speaker {
     private readonly onError: (err: Error) => void,
   ) {}
 
-  /** Queues `text`; resolves once it has been sent (or skipped). Never rejects. */
-  say(text: string): Promise<void> {
-    this.queue = this.queue.then(() => this.speak(text)).catch((err: Error) => this.onError(err));
+  /**
+   * Queues `text`, spoken by `engine` (default: the one given to the constructor). Resolves
+   * once it has been sent (or skipped). Never rejects.
+   */
+  say(text: string, engine: TtsEngine = this.engine): Promise<void> {
+    this.queue = this.queue.then(() => this.speak(text, engine)).catch((err: Error) => this.onError(err));
     return this.queue;
   }
 
-  private async speak(text: string): Promise<void> {
+  private async speak(text: string, engine: TtsEngine): Promise<void> {
     if (!this.link.alive) return;
-    const pcm = await this.engine.synthesize(text);
+    const pcm = await engine.synthesize(text);
     const clip = pcm.subarray(0, Math.min(pcm.length, MAX_SPEECH_BYTES) & ~1);
     if (clip.length === 0) return;
 

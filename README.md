@@ -45,6 +45,11 @@ bridge, and reacts to events: happy on done, amber on waiting for input, `× ×`
 toward the agent's arc (Claude left, Codex right). The working state needs the `UserPromptSubmit`
 hook, so re-run `npm run hooks:install` after updating the bridge.
 
+After 30 s with no agent event, permission request or touch, the dashboard gives way to face mode:
+only the neon rim stays and the eyes fill the screen. After 5 quiet minutes the robot dozes off
+(`Zz`). Any event or a tap brings the dashboard back; a tap also startles the robot. Usage and
+clock updates don't count as activity.
+
 ### Dashboard simulator
 
 The idle dashboard (`main/agent_dashboard.c`) is plain LVGL, so it also builds on the host
@@ -55,7 +60,8 @@ against the same LVGL 9.6 the firmware uses (run `idf.py reconfigure` once so
 cd echoear-firmware/simulator
 ./render-screenshot.sh /tmp/dash.png              # 360x360 PNG with the round mask
 ./render-screenshot.sh /tmp/dash.png --stress     # worst-case values; also --unknown, --after-ms N
-./render-screenshot.sh /tmp/dash.png --mood happy # idle busy sleep happy attention error
+./render-screenshot.sh /tmp/dash.png --mood happy # idle busy sleep happy attention error surprised
+./render-screenshot.sh /tmp/face.png --face       # fullscreen face mode; combine with --mood
 ./cmake-out/dashboard_sim                         # live SDL window, cycles through the robot moods
 ```
 
@@ -109,5 +115,10 @@ How it behaves:
   `ECHOEAR_TTS=off` mutes it (chimes stay). By default it uses the macOS system voice (System
   Settings → Accessibility → Spoken Content), which is the only way to get Siri voices; set
   `ECHOEAR_TTS_VOICE=Samantha` to force a voice listed by `say -v '?'`.
+- Chatter: when no agent has done anything for 5–10 minutes, the robot says a silly Vietnamese line
+  (time of day, quota nearly gone, big spend, or just bored), at most 3 times per quiet spell and
+  never while an agent works. Voice `ECHOEAR_CHATTER_VOICE` (default `Linh`, which macOS ships;
+  if it is missing, `say` silently uses its default voice); `ECHOEAR_CHATTER=off` turns it off. It
+  is also off whenever `ECHOEAR_TTS=off`, and USB-only like all speech.
 
 Wire format and message types: [docs/device-protocol.md](docs/device-protocol.md).

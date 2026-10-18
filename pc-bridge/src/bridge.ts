@@ -7,18 +7,21 @@
  *   ECHOEAR_BLE=off                    USB only (no Bluetooth permission needed)
  *   ECHOEAR_CONFIRM_TIMEOUT_S=120      how long a request waits on the device
  *   ECHOEAR_TTS / ECHOEAR_TTS_VOICE    spoken announcements, see tts/tts-engine.ts
+ *   ECHOEAR_CHATTER / ECHOEAR_CHATTER_VOICE  idle chatter, see chatter/chatter.ts
  */
+import { Chatter } from "./chatter/chatter.js";
 import { clockMessage } from "./clock/clock-message.js";
 import { startIpcServer } from "./ipc/ipc-server.js";
 import { SOCKET_PATH, USAGE_STATE_PATH } from "./ipc/paths.js";
 import { PermissionBroker } from "./permission/permission-broker.js";
-import type { AgentEventMessage, HostMessage } from "./protocol/messages.js";
+import type { AgentEventMessage, AgentSource, HostMessage } from "./protocol/messages.js";
 import { Speaker } from "./speech/speaker.js";
 import { doneSpeech, permissionSpeech } from "./speech/speech-text.js";
 import { BleTransport } from "./transport/ble-transport.js";
 import type { DeviceLink } from "./transport/device-link.js";
 import { SerialTransport } from "./transport/serial-transport.js";
 import { TransportHub } from "./transport/transport-hub.js";
+import { SayEngine } from "./tts/say-engine.js";
 import { createTtsEngine } from "./tts/tts-engine.js";
 import { startCodexSessionWatcher } from "./usage/codex-session-watcher.js";
 import { UsageStore } from "./usage/usage-store.js";
@@ -48,16 +51,30 @@ const speechLink = {
   sendAudio: (payload: Uint8Array) => transport.sendAudio(payload),
 };
 const speaker = tts && new Speaker(tts, speechLink, (err) => log(`speech failed: ${err.message}`));
+const chatterVoice = new SayEngine(process.env.ECHOEAR_CHATTER_VOICE ?? "Linh");
+const chatter =
+  speaker && process.env.ECHOEAR_CHATTER !== "off"
+    ? new Chatter({ say: (text) => void speaker.say(text, chatterVoice), usage: () => usage.snapshot() })
+    : null;
 const broker = new PermissionBroker((msg) => {
   const sent = transport.send(msg);
-  if (sent && msg.t === "confirm_req") void speaker?.say(permissionSpeech(msg));
+  if (sent && msg.t === "confirm_req") {
+    void speaker?.say(permissionSpeech(msg));
+    chatter?.onAgent(msg.src, true);
+  }
   return sent;
 }, CONFIRM_TIMEOUT_MS);
 
 /** Shows the event on the device (which chimes) and reads finished tasks aloud. */
 function sendEvent(event: Omit<AgentEventMessage, "t">): void {
   transport.send({ t: "event", ...event });
+  chatter?.onAgent(event.src, false);
   if (event.kind === "done") void speaker?.say(doneSpeech(event.src, event.text));
+}
+
+function sendActivity(src: AgentSource, busy: boolean): void {
+  transport.send({ t: "activity", src, busy });
+  chatter?.onAgent(src, busy);
 }
 
 let usageTimer: NodeJS.Timeout | null = null;
@@ -99,7 +116,7 @@ await startIpcServer({
   },
   statusline: (input) => usage.updateFromStatusline(input),
   event: sendEvent,
-  activity: (activity) => transport.send({ t: "activity", ...activity }),
+  activity: (activity) => sendActivity(activity.src, activity.busy),
   shutdown: () => {
     log("stop requested");
     shutdown();
@@ -114,15 +131,17 @@ await startCodexSessionWatcher({
       kind: "done",
       text: message.replace(/\s+/g, " ").trim().slice(0, MAX_EVENT_TEXT_CHARS) || "Task finished",
     }),
-  onActivity: (busy) => transport.send({ t: "activity", src: "codex", busy }),
+  onActivity: (busy) => sendActivity("codex", busy),
 });
 
 setInterval(() => transport.send(clockMessage()), CLOCK_RESYNC_MS).unref();
 
 transport.start();
-log(`bridge listening on ${SOCKET_PATH}${tts ? "" : " (speech off)"}`);
+chatter?.start();
+log(`bridge listening on ${SOCKET_PATH}${tts ? "" : " (speech off)"}${chatter ? "" : " (chatter off)"}`);
 
 function shutdown(): never {
+  chatter?.stop();
   broker.cancelAll();
   transport.close();
   process.exit(0);
