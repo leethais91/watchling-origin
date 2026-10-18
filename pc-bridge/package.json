@@ -18,7 +18,10 @@
     "hooks:install": "node dist/install-hooks.js install",
     "hooks:uninstall": "node dist/install-hooks.js uninstall",
     "hooks:install:codex": "node dist/install-hooks.js install --codex",
-    "hooks:uninstall:codex": "node dist/install-hooks.js uninstall --codex"
+    "hooks:uninstall:codex": "node dist/install-hooks.js uninstall --codex",
+    "voice:design": "tsx src/voice/generate-voice.ts design",
+    "voice:audition": "tsx src/voice/generate-voice.ts audition",
+    "voice:generate": "tsx src/voice/generate-voice.ts generate"
   },
   "dependencies": {
     "@stoprocent/noble": "^2.8.0",

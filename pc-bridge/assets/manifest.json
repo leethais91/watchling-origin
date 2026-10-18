@@ -1,0 +1,111 @@
+{
+  "model": "gemini-3.8-flash-tts",
+  "voiceId": "voice_0tetlqv7unme",
+  "lines": {
+    "SELF_01": {
+      "textHash": "98dc3f644be38bbf"
+    },
+    "SELF_02": {
+      "textHash": "da7c28c910c2769e"
+    },
+    "SELF_03": {
+      "textHash": "8c0fe306d2ffc427"
+    },
+    "SELF_04": {
+      "textHash": "1c7b058680e85e75"
+    },
+    "SELF_05": {
+      "textHash": "80da487f8a41dc83"
+    },
+    "SELF_06": {
+      "textHash": "473b1d5aae1aeabe"
+    },
+    "SELF_07": {
+      "textHash": "fbdc77bea5246a18"
+    },
+    "SELF_08": {
+      "textHash": "27a46aa96598bdcf"
+    },
+    "SELF_09": {
+      "textHash": "5601d54199db0991"
+    },
+    "SELF_10": {
+      "textHash": "57ac97fbcf05db5b"
+    },
+    "SELF_11": {
+      "textHash": "6032bb42bda62369"
+    },
+    "SELF_12": {
+      "textHash": "4f50bcf4d57f70d4"
+    },
+    "SELF_13": {
+      "textHash": "631336e5af07748f"
+    },
+    "SELF_14": {
+      "textHash": "6f3ea0c9a9d8a988"
+    },
+    "SELF_15": {
+      "textHash": "55dbd75bdfc46808"
+    },
+    "SELF_16": {
+      "textHash": "e0a88b1eeea00539"
+    },
+    "SELF_17": {
+      "textHash": "e6bda265e2f39777"
+    },
+    "SELF_18": {
+      "textHash": "34d557423e9e818f"
+    },
+    "SELF_19": {
+      "textHash": "6bbb3406cf6286d8"
+    },
+    "SELF_20": {
+      "textHash": "eab5e58be7e8376b"
+    },
+    "SELF_21": {
+      "textHash": "e3bb1eba0b047e04"
+    },
+    "SELF_22": {
+      "textHash": "673a19fadf10c0ef"
+    },
+    "DEV_01": {
+      "textHash": "0cc3f52df299a594"
+    },
+    "DEV_02": {
+      "textHash": "e1b7c6391b14bcf4"
+    },
+    "DEV_03": {
+      "textHash": "94c239427a5f288b"
+    },
+    "DEV_04": {
+      "textHash": "a44436e3e9687a59"
+    },
+    "DEV_05": {
+      "textHash": "db0959a3daddde89"
+    },
+    "DEV_06": {
+      "textHash": "b2460fdf27c59564"
+    },
+    "DEV_07": {
+      "textHash": "54f966d53c1fc41e"
+    },
+    "DEV_08": {
+      "textHash": "7cdf1c37898cf7e0"
+    },
+    "DEV_09": {
+      "textHash": "1bfc5f6321dfa0d7"
+    },
+    "DEV_10": {
+      "textHash": "b9af554d41b611a1"
+    },
+    "DEV_11": {
+      "textHash": "c16d365cb28883b7"
+    },
+    "DEV_12": {
+      "textHash": "ec5a06855c7577d4"
+    },
+    "CARE_01": {
+      "textHash": "d05e42f5c287ab25"
+    }
+  }
+}
