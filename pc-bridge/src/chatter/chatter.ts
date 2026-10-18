@@ -5,6 +5,7 @@
  *
  *   ECHOEAR_CHATTER=off            no chatter (also off whenever speech is off)
  *   ECHOEAR_CHATTER_VOICE=Linh     macOS voice for the Vietnamese lines
+ *   ECHOEAR_CHATTER_DELAY_S=30     fixed quiet time instead of 5–10 minutes, for trying it out
  */
 import type { AgentSource, UsageMessage } from "../protocol/messages.js";
 import { chatterLine } from "./chatter-lines.js";
@@ -21,6 +22,8 @@ export interface ChatterOptions {
   now?: () => Date;
   /** [0, 1), like Math.random. */
   random?: () => number;
+  /** Quiet time before each line, picked between min and max. Default 5–10 minutes. */
+  quietMs?: { min: number; max: number };
 }
 
 export class Chatter {
@@ -30,10 +33,12 @@ export class Chatter {
   private readonly busySince = new Map<AgentSource, number>();
   private readonly now: () => Date;
   private readonly random: () => number;
+  private readonly quietMs: { min: number; max: number };
 
   constructor(private readonly opts: ChatterOptions) {
     this.now = opts.now ?? (() => new Date());
     this.random = opts.random ?? Math.random;
+    this.quietMs = opts.quietMs ?? { min: MIN_QUIET_MS, max: MAX_QUIET_MS };
   }
 
   start(): void {
@@ -56,7 +61,8 @@ export class Chatter {
   private schedule(): void {
     this.stop();
     if (this.spoken >= MAX_LINES_PER_SPELL) return;
-    const delay = MIN_QUIET_MS + Math.floor(this.random() * (MAX_QUIET_MS - MIN_QUIET_MS));
+    const { min, max } = this.quietMs;
+    const delay = min + Math.floor(this.random() * (max - min));
     this.timer = setTimeout(() => this.tick(), delay);
     this.timer.unref();
   }

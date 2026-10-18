@@ -52,9 +52,17 @@ const speechLink = {
 };
 const speaker = tts && new Speaker(tts, speechLink, (err) => log(`speech failed: ${err.message}`));
 const chatterVoice = new SayEngine(process.env.ECHOEAR_CHATTER_VOICE ?? "Linh");
+const chatterDelayMs = Number(process.env.ECHOEAR_CHATTER_DELAY_S) * 1000;
 const chatter =
   speaker && process.env.ECHOEAR_CHATTER !== "off"
-    ? new Chatter({ say: (text) => void speaker.say(text, chatterVoice), usage: () => usage.snapshot() })
+    ? new Chatter({
+        say: (text) => {
+          log(`chatter: ${text}${speechLink.alive ? "" : " (not spoken: device not on USB)"}`);
+          void speaker.say(text, chatterVoice);
+        },
+        usage: () => usage.snapshot(),
+        quietMs: chatterDelayMs > 0 ? { min: chatterDelayMs, max: chatterDelayMs } : undefined,
+      })
     : null;
 const broker = new PermissionBroker((msg) => {
   const sent = transport.send(msg);

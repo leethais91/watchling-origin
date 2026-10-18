@@ -67,3 +67,14 @@ test("lines fit the hour and the usage", () => {
   assert.equal(quiet, "Commit chưa đó? Đừng để mất code nha.");
   assert.notEqual(chatterLine({ ...base, hour: 15 }, last, quiet), quiet);
 });
+
+test("a custom quiet time replaces the 5-10 minute wait", (t) => {
+  t.after(() => mock.timers.reset());
+  mock.timers.enable({ apis: ["setTimeout", "Date"], now: new Date(2026, 9, 18, 15, 0) });
+  const said: string[] = [];
+  const chatter = new Chatter({ say: (text) => said.push(text), usage: () => usage, quietMs: { min: 30_000, max: 30_000 } });
+  chatter.start();
+  mock.timers.tick(30_000);
+  assert.equal(said.length, 1);
+  chatter.stop();
+});

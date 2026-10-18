@@ -119,6 +119,7 @@ How it behaves:
   (time of day, quota nearly gone, big spend, or just bored), at most 3 times per quiet spell and
   never while an agent works. Voice `ECHOEAR_CHATTER_VOICE` (default `Linh`, which macOS ships;
   if it is missing, `say` silently uses its default voice); `ECHOEAR_CHATTER=off` turns it off. It
-  is also off whenever `ECHOEAR_TTS=off`, and USB-only like all speech.
+  is also off whenever `ECHOEAR_TTS=off`, and USB-only like all speech. Each line is logged as
+  `chatter: ...` in the bridge log; `ECHOEAR_CHATTER_DELAY_S=30` shortens the wait for trying it out.
 
 Wire format and message types: [docs/device-protocol.md](docs/device-protocol.md).
