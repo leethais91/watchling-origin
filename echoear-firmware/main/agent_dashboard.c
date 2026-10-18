@@ -54,9 +54,9 @@
 #define ICONS_Y              -99
 #define ROBOT_Y              -10
 #define SIDE_X               114
-#define PERCENT_Y            -22
-#define PROVIDER_Y           -2
-#define WEEKLY_Y             16
+#define PERCENT_Y            -26
+#define LOGO_Y               0
+#define WEEKLY_Y             22
 #define COST_Y               88
 #define COST_CAPTION_Y       111
 #define STATUS_Y             134
@@ -143,7 +143,7 @@ static lv_obj_t *arc_layer_create(lv_obj_t *parent, int32_t width, uint32_t trac
 }
 
 static void usage_side_create(usage_side_t *side, lv_obj_t *parent, uint16_t start, uint16_t end,
-                              uint32_t color, uint32_t highlight, int32_t label_x, const char *name)
+                              uint32_t color, uint32_t highlight, int32_t label_x, const lv_image_dsc_t *logo)
 {
     /* The right arc runs clockwise from the top, so REVERSE makes both fill bottom-up. */
     bool reverse = start > end;
@@ -156,7 +156,10 @@ static void usage_side_create(usage_side_t *side, lv_obj_t *parent, uint16_t sta
     }
 
     side->percent = label_create(parent, &font_dash_bold_20, color, label_x, PERCENT_Y, "--");
-    label_create(parent, &font_dash_semibold_14, color, label_x, PROVIDER_Y, name);
+    /* The agent's logo, tinted in its arc colour, in place of its name. */
+    lv_obj_t *icon = lv_image_create(parent);
+    lv_image_set_src(icon, logo);
+    lv_obj_align(icon, LV_ALIGN_CENTER, label_x, LOGO_Y);
     side->weekly = label_create(parent, &lv_font_montserrat_14, COLOR_TEXT_SECONDARY, label_x, WEEKLY_Y, "");
 }
 
@@ -282,9 +285,9 @@ lv_obj_t *agent_dashboard_create(lv_obj_t *parent)
     lv_obj_set_scrollable(s_info, false);
 
     usage_side_create(&s_claude, s_info, CLAUDE_ARC_START, CLAUDE_ARC_END, COLOR_CLAUDE, COLOR_CLAUDE_HI,
-                      -SIDE_X, "Claude");
+                      -SIDE_X, &img_logo_claude);
     usage_side_create(&s_codex, s_info, CODEX_ARC_START, CODEX_ARC_END, COLOR_CODEX, COLOR_CODEX_HI,
-                      SIDE_X, "Codex");
+                      SIDE_X, &img_logo_codex);
 
     s_time = label_create(s_info, &font_dash_bold_30, COLOR_TEXT_PRIMARY, 0, TIME_Y, "--:--");
     s_date = label_create(s_info, &lv_font_montserrat_16, COLOR_TEXT_SOFT, 0, DATE_Y, "");

@@ -5,7 +5,6 @@
  *   npx lv_font_conv@1.5.3 --no-compress --bpp 4 --format lvgl --lv-include lvgl.h
  *   bold 30: --symbols '0123456789:$.,-'   (clock, cost)
  *   bold 20: --symbols '0123456789%-'      (usage percentages)
- *   semibold 14: -r 0x20-0x7E               (provider names)
  * Font: JetBrains Mono Medium (SIL OFL 1.1, see JetBrainsMono-OFL.txt; the variable font
  *   instanced at wght=500), 15 px, ASCII + Vietnamese + a few typographic marks, for agent text:
  *   -r 0x20-0x7E,0xA0-0xFF,0x102-0x103,0x110-0x111,0x128-0x129,0x168-0x169,0x1A0-0x1A1,
@@ -19,6 +18,12 @@
  *     magick base.png \( base.png -alpha off -blur 0x8 \) mask.png -compose over -composite rgb.png
  *     magick rgb.png base.png -compose CopyOpacity -composite robot_head.png
  *   then lvgl/scripts/LVGLImage.py --ofmt C --cf RGB565A8 --name img_robot_head
+ * Images: logo_claude.png, logo_codex.png (24x24, alpha): the Claude and OpenAI marks from
+ *   @lobehub/icons-static-svg 1.95.1 (MIT; icons/claude.svg, icons/openai.svg), tinted with the
+ *   arc colours (Claude #D97757, Codex #10DFA8):
+ *     sed 's/currentColor/#D97757/g; s/width="1em"//; s/height="1em"//' claude.svg > tinted.svg
+ *     rsvg-convert -w 24 -h 24 tinted.svg -o logo_claude.png
+ *     python3 tools/png_to_lvgl.py main/assets/logo_claude.png img_logo_claude
  */
 #pragma once
 
@@ -26,6 +31,7 @@
 
 LV_FONT_DECLARE(font_dash_bold_30);
 LV_FONT_DECLARE(font_dash_bold_20);
-LV_FONT_DECLARE(font_dash_semibold_14);
 LV_FONT_DECLARE(font_mono_15);
 LV_IMAGE_DECLARE(img_robot_head);
+LV_IMAGE_DECLARE(img_logo_claude);
+LV_IMAGE_DECLARE(img_logo_codex);

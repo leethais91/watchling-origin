@@ -22,6 +22,7 @@
 #define COLOR_DANGER      0xEF4444
 
 #define MODAL_RING_PX     8
+#define MODAL_LOGO_Y      34
 /*
  * The decision buttons run past the round edge on purpose: the glass slices off their
  * outer sides. Labels shift inward so the text stays centred in the visible part.
@@ -78,7 +79,7 @@ static lv_obj_t *s_pairing;
 static lv_obj_t *s_pairing_code;
 
 static lv_obj_t *s_modal;
-static lv_obj_t *s_modal_title;
+static lv_obj_t *s_modal_logo;
 static lv_obj_t *s_modal_tool;
 static lv_obj_t *s_modal_summary;
 static uint32_t s_modal_id;
@@ -181,9 +182,9 @@ static void modal_create(void)
     lv_obj_set_style_pad_all(s_modal, 0, 0);
     lv_obj_set_scrollable(s_modal, false);
 
-    s_modal_title = lv_label_create(s_modal);
-    lv_obj_set_style_text_color(s_modal_title, lv_color_hex(COLOR_MUTED), 0);
-    lv_obj_align(s_modal_title, LV_ALIGN_TOP_MID, 0, 40);
+    /* Which agent asks: its logo, above the tool name. */
+    s_modal_logo = lv_image_create(s_modal);
+    lv_obj_align(s_modal_logo, LV_ALIGN_TOP_MID, 0, MODAL_LOGO_Y);
 
     s_modal_tool = lv_label_create(s_modal);
     lv_obj_set_style_text_font(s_modal_tool, &lv_font_montserrat_20, 0);
@@ -212,13 +213,14 @@ static void modal_create(void)
     lv_obj_set_hidden(s_modal, true);
 }
 
-static void modal_show(uint32_t id, const char *agent_name, const char *tool, const char *summary, ui_risk_t risk)
+static void modal_show(uint32_t id, const lv_image_dsc_t *agent_logo, const char *tool, const char *summary,
+                       ui_risk_t risk)
 {
     uint32_t ring = risk == UI_RISK_HIGH ? COLOR_DANGER : COLOR_WARN;
     s_modal_id = id;
     lv_obj_set_style_border_color(s_modal, lv_color_hex(ring), 0);
     lv_obj_set_style_text_color(s_modal_tool, lv_color_hex(ring), 0);
-    lv_label_set_text(s_modal_title, agent_name);
+    lv_image_set_src(s_modal_logo, agent_logo);
     lv_label_set_text(s_modal_tool, tool);
     lv_label_set_text(s_modal_summary, summary);
     lv_obj_scroll_to_y(lv_obj_get_parent(s_modal_summary), 0, LV_ANIM_OFF);
@@ -465,7 +467,7 @@ void ui_show_confirm(uint32_t id, const char *source, const char *tool, const ch
 {
     bsp_display_lock(0);
     activity_note();
-    modal_show(id, agent_index(source) == AGENT_CODEX ? "Codex" : "Claude", tool, summary, risk);
+    modal_show(id, agent_index(source) == AGENT_CODEX ? &img_logo_codex : &img_logo_claude, tool, summary, risk);
     bsp_display_unlock();
 }
 
