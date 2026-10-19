@@ -11,7 +11,7 @@ Start with a foreground USB connection from `pc-bridge/`: `WATCHLING_BLE=off npm
 | ESP-IDF helper cannot load | Complete ESP-IDF's installation first; check that its `export.sh` exists and supports your shell |
 | ESP-IDF asks for a missing `idf5.5_py3.x_env` | That Python version has no ESP-IDF environment yet: in a shell that sourced the helper, run `python3 "$IDF_PATH/tools/idf_tools.py" install-python-env` |
 | Helper reports uv or Python missing | Install uv, then `uv python install 3.12` (or the version in `WATCHLING_IDF_PYTHON`) |
-| Native Node module load error | Activate Node 22, run `npm ci` then `npm run build`; reinstall agent hooks to pin that Node executable |
+| Native Node module load error | Activate Node 22 or newer, run `npm ci` then `npm run build`; reinstall agent hooks to pin that Node executable |
 | Hook install rejects agent settings | Ensure the existing settings or hooks file contains valid JSON in the supported object format |
 | Bridge does not start with a session | Rebuild and reinstall the relevant hooks; begin a new session; inspect `~/.watchling/bridge.log` |
 | Environment override appears ignored | A launchd process does not inherit shell exports; use `launchctl setenv` then restart the bridge |

@@ -1,10 +1,10 @@
 # Development
 
-The bridge is TypeScript/Node 22; firmware is ESP-IDF C with LVGL. Follow [getting started](getting-started.md) for the initial toolchain and device setup. See [CONTRIBUTING.md](../CONTRIBUTING.md) before sending changes.
+The bridge is TypeScript on Node 22 or newer; firmware is ESP-IDF C with LVGL. Follow [getting started](getting-started.md) for the initial toolchain and device setup. See [CONTRIBUTING.md](../CONTRIBUTING.md) before sending changes.
 
 ## Bridge checks
 
-From `pc-bridge/` with Node 22 active:
+From `pc-bridge/` with Node 22 or newer active:
 
 ```sh
 npm ci

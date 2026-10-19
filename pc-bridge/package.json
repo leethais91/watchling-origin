@@ -5,7 +5,7 @@
   "description": "Bridges Claude Code / Codex events to Watchling, a desk robot on the ESP-VoCat (EchoEar) board",
   "type": "module",
   "engines": {
-    "node": ">=22 <23"
+    "node": ">=22"
   },
   "scripts": {
     "build": "tsc",

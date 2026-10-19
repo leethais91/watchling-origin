@@ -7,7 +7,7 @@ Claude Code hooks + statusline ── Unix socket ─┐
 Codex CLI permission/session hooks ────────────┤
 Codex CLI local session JSONL ─── file watcher ┤
                                              ▼
-                                    macOS Node 22 bridge
+                                    macOS Node 22+ bridge
                                       │           │
                                  USB preferred   BLE fallback
                                       └─────┬─────┘

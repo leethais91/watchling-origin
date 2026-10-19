@@ -5,7 +5,7 @@ Build the firmware for ESP-VoCat V1.2, connect it to a Mac, and enable the agent
 ## Prerequisites
 
 - ESP-VoCat V1.2 and a USB-C cable that carries data; see [hardware](hardware.md).
-- macOS, Node.js 22 and npm. The bridge is not supported as a complete installation on Linux or Windows.
+- macOS, Node.js 22 or newer and npm. The bridge is not supported as a complete installation on Linux or Windows.
 - An installed ESP-IDF **5.5** environment with the ESP32-S3 toolchain. Follow [Espressif's macOS setup instructions](https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32s3/get-started/linux-macos-setup.html), including `./install.sh esp32s3`; the helper below loads an existing installation. Keep the SDK and project paths free of spaces, as required by the ESP-IDF build system.
 - [uv](https://docs.astral.sh/uv/) with its managed Python 3.12: `uv python install 3.12`. ESP-IDF supports Python 3.9–3.13, and newer Homebrew Pythons break its setup, so `scripts/idf-env.sh` always runs ESP-IDF on that uv-managed interpreter and never on a system Python. Set `WATCHLING_IDF_PYTHON` to pick another supported version. ESP-IDF keeps one Python environment per version: create it with the same interpreter by running `install.sh esp32s3` (or `python3 "$IDF_PATH/tools/idf_tools.py" install-python-env`) in a shell that sourced the helper.
 - Claude Code terminal sessions or Codex CLI. Codex permission integration requires a version with `PermissionRequest` hooks (the project targets 0.162+); the integration depends on the agent's hook and session formats.
@@ -24,7 +24,7 @@ npm run build
 npm run list-ports
 ```
 
-If you do not use nvm, activate Node 22 with your preferred version manager and skip `nvm use`. Native dependencies may require Apple's command line developer tools. Port listing marks Espressif devices with `*`; note the exact `/dev/cu.usbmodem…` path for flashing. Then return to the root with `cd ..`.
+If you do not use nvm, activate Node 22 or newer with your preferred version manager and skip `nvm use`. Native dependencies may require Apple's command line developer tools. Port listing marks Espressif devices with `*`; note the exact `/dev/cu.usbmodem…` path for flashing. Then return to the root with `cd ..`.
 
 ## 2. Build and flash firmware
 

@@ -6,7 +6,7 @@ The supported host is macOS; Linux/Windows support is not currently promised.
 
 ## Local checks
 
-Use Node 22, then run:
+Use Node 22 or newer, then run:
 
 ```sh
 cd pc-bridge

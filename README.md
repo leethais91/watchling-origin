@@ -27,7 +27,7 @@ A tiny desk companion for **Claude Code and Codex CLI**, built for the **ESP-VoC
 | --- | --- |
 | Host | macOS; automatic bridge startup uses launchd and speech uses `say` |
 | Hardware | ESP-VoCat V1.2, ESP32-S3, 16 MB flash / 16 MB octal PSRAM |
-| Bridge | Node.js 22 and npm |
+| Bridge | Node.js 22 or newer and npm |
 | Firmware | ESP-IDF 5.5, ESP-VoCat BSP, LVGL 9.6 |
 | Agents | Claude Code terminal integration; Codex CLI session files and optional permission hooks |
 
@@ -45,7 +45,7 @@ npm run build
 npm run list-ports
 ```
 
-`nvm use` is optional if Node 22 is already active. For a first USB-only run:
+`nvm use` is optional if Node 22 or newer is already active. For a first USB-only run:
 
 ```sh
 WATCHLING_BLE=off npm start
