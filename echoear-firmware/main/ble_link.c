@@ -167,11 +167,10 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 
 static void advertise(void)
 {
+    /* Flags + the 128-bit service UUID already take 21 of the 31 advertising bytes, so the
+     * name goes in the scan response; hosts scanning actively still show it. */
     struct ble_hs_adv_fields fields = {
         .flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP,
-        .name = (const uint8_t *)DEVICE_NAME,
-        .name_len = sizeof(DEVICE_NAME) - 1,
-        .name_is_complete = 1,
         .uuids128 = &NUS_SERVICE,
         .num_uuids128 = 1,
         .uuids128_is_complete = 1,
@@ -179,6 +178,16 @@ static void advertise(void)
     int rc = ble_gap_adv_set_fields(&fields);
     if (rc != 0) {
         ESP_LOGE(TAG, "Advertising data rejected (%d)", rc);
+        return;
+    }
+    struct ble_hs_adv_fields rsp = {
+        .name = (const uint8_t *)DEVICE_NAME,
+        .name_len = sizeof(DEVICE_NAME) - 1,
+        .name_is_complete = 1,
+    };
+    rc = ble_gap_adv_rsp_set_fields(&rsp);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "Scan response rejected (%d)", rc);
         return;
     }
     struct ble_gap_adv_params params = {
