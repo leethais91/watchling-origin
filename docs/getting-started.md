@@ -12,6 +12,26 @@ Build the firmware for ESP-VoCat V1.2, connect it to a Mac, and enable the agent
 
 No audio service API keys are needed for setup or everyday use.
 
+## Offline firmware installation
+
+Private firmware releases are attached to authenticated GitHub releases. The draft is for the repository owner and writers/admins to review. After the owner publishes it, collaborators with repository read access can log in and download both the ZIP and its matching `.zip.sha256` file. Verify the archive before extracting it:
+
+```sh
+shasum -a 256 -c watchling-v1.2.3-esp-vocat-v1.2.zip.sha256
+unzip watchling-v1.2.3-esp-vocat-v1.2.zip
+cd watchling-v1.2.3-esp-vocat-v1.2
+```
+
+The extracted installer is self-contained. It needs Node.js 22 or newer, but no network connection after the download. Start it with `node serve-installer.mjs`, run `sh start.command`, or double-click `start.command` in Finder. If macOS refuses to open the launcher, run `chmod +x start.command` first. The launcher serves only `http://127.0.0.1:8765`; open that address in desktop Chrome or Edge. The macOS launcher may open Chrome automatically.
+
+Before selecting the device, stop the bridge and any serial monitor from `pc-bridge/`:
+
+```sh
+npm run bridge:stop
+```
+
+Use **Connect & install**, select the ESP-VoCat and confirm. Leave **Erase device** unchecked to preserve Settings and Bluetooth bonds. Erasing removes device data, including those settings and bonds. The installer flashes firmware only; the Mac bridge remains a separate installation. When finished, press Ctrl-C in the installer terminal and start a new agent session.
+
 ## 1. Build the bridge
 
 From the repository root:

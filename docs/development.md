@@ -21,6 +21,42 @@ reachable Git history. It never flashes hardware or installs hooks in a real age
 The firmware job follows [Espressif's CI action](https://github.com/espressif/esp-idf-ci-action);
 Node setup and npm caching use [GitHub's setup-node action](https://github.com/actions/setup-node).
 
+## Private firmware release packaging
+
+The [tag workflow](../.github/workflows/firmware-release.yml) accepts semantic version tags such
+as `v1.2.3`, requires the GitHub repository to remain private, builds with ESP-IDF 5.5 and
+`idf-component-manager==2.5.2`, and creates or updates a private draft release. The owner reviews
+and publishes the draft manually. It does not publish automatically or use GitHub Pages. Packaging
+is artifact preparation; it does not prove USB, Bluetooth, audio or touchscreen behavior on
+hardware.
+
+To reproduce a release bundle locally, use Node 22 or newer and a sourced ESP-IDF environment:
+
+```sh
+VERSION=v1.2.3
+COMMIT=$(git rev-parse HEAD)
+. scripts/idf-env.sh
+python3 -m pip install idf-component-manager==2.5.2
+npm --prefix web-installer ci
+npm --prefix web-installer test
+npm --prefix web-installer run build
+cd echoear-firmware
+idf.py -DPROJECT_VER="$VERSION" build
+python3 ../scripts/package-firmware-release.py \
+  --build-dir build \
+  --web-dir ../web-installer/dist \
+  --output-dir ../release-output \
+  --source-root .. \
+  --idf-path "$IDF_PATH" \
+  --version "$VERSION" \
+  --commit "$COMMIT"
+```
+
+The [package script](../scripts/package-firmware-release.py) reads ESP-IDF's generated
+`build/flasher_args.json` and copies every flash part at its generated offset. Do not supply
+hand-written offsets. It writes the ZIP and matching `.zip.sha256` file under `release-output/`;
+verify the ZIP before sharing it with an authenticated repository user.
+
 From the root, run the local repository check with:
 
 ```sh

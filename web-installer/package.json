@@ -1,0 +1,9 @@
+{
+  "name": "watchling-web-installer",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": { "build": "node bundle-installer.mjs", "test": "node --test test/*.test.mjs" },
+  "dependencies": { "esp-web-tools": "10.4.0" },
+  "devDependencies": { "esbuild": "0.28.2" }
+}

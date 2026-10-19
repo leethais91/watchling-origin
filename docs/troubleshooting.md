@@ -10,6 +10,7 @@ Start with a foreground USB connection from `pc-bridge/`: `WATCHLING_BLE=off npm
 | `idf.py` is missing | Source `scripts/idf-env.sh` from the root; set `IDF_PATH` for a nondefault installation |
 | ESP-IDF helper cannot load | Complete ESP-IDF's installation first; check that its `export.sh` exists and supports your shell |
 | ESP-IDF asks for a missing `idf5.5_py3.x_env` | That Python version has no ESP-IDF environment yet: in a shell that sourced the helper, run `python3 "$IDF_PATH/tools/idf_tools.py" install-python-env` |
+| Clean firmware build fails with `MissingKconfigError: LV_USE_FREETYPE` | In the active ESP-IDF environment, run `python -m pip install 'idf-component-manager==2.5.2'`, then retry `idf.py build`. CI pins this version to handle LVGL's conditional dependencies before Kconfig values exist. |
 | Helper reports uv or Python missing | Install uv, then `uv python install 3.12` (or the version in `WATCHLING_IDF_PYTHON`) |
 | Native Node module load error | Activate Node 22 or newer, run `npm ci` then `npm run build`; reinstall agent hooks to pin that Node executable |
 | Hook install rejects agent settings | Ensure the existing settings or hooks file contains valid JSON in the supported object format |

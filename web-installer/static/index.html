@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install Watchling</title>
+<link rel="stylesheet" href="style.css">
+<main>
+  <header><span class="wordmark">Watchling</span><span>Local firmware installer</span></header>
+  <section class="intro">
+    <h1>A fresh start for your desk companion.</h1>
+    <p>Install this release on an <strong>ESP-VoCat V1.2</strong> using its USB data cable.</p>
+  </section>
+  <section class="install" aria-labelledby="release-title">
+    <div>
+      <h2 id="release-title">Your downloaded release</h2>
+      <dl><dt>Version</dt><dd id="version">Loading…</dd><dt>Board</dt><dd>ESP-VoCat V1.2 · ESP32-S3</dd></dl>
+      <p>For another version, download its installer ZIP from the private repository’s Releases page.</p>
+      <a href="release.json">Release details</a> · <a href="SHA256SUMS">Checksums</a>
+    </div>
+    <div class="action">
+      <p id="status" role="status">Checking the firmware files…</p>
+      <esp-web-install-button id="installer" manifest="manifest.json" hidden>
+        <button slot="activate">Connect &amp; install</button>
+        <span slot="unsupported">Use desktop Chrome or Edge with Web Serial support.</span>
+        <span slot="not-allowed">Run start.command and use the localhost address it prints.</span>
+      </esp-web-install-button>
+      <p class="small">Your browser asks you to select the USB device. Nothing is written until you confirm the installation.</p>
+    </div>
+  </section>
+  <section class="instructions" aria-labelledby="before-title">
+    <h2 id="before-title">Before you connect</h2>
+    <ol>
+      <li>Stop Watchling’s bridge: <code>cd pc-bridge &amp;&amp; npm run bridge:stop</code>. Close serial monitors too.</li>
+      <li>Connect Vocat by USB. If it is missing from the chooser, hold BOOT while reconnecting.</li>
+      <li>Keep “Erase device” unchecked to preserve Settings and Bluetooth pairing. Erasing removes all device data.</li>
+      <li>After installation, start a new Codex or Claude terminal session to reconnect the installed bridge.</li>
+    </ol>
+    <p>The installer and firmware are served from this computer. It works offline after downloading the ZIP. Keep the terminal open; press Ctrl-C when finished.</p>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</html>

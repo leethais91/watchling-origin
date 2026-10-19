@@ -60,6 +60,18 @@ npm run hooks:install:codex    # Codex CLI
 
 These commands modify per-user agent settings, create backups and register a shared macOS launch agent. Read [what the installer changes](docs/getting-started.md#agent-integrations) first. Start a new agent session to start the bridge automatically.
 
+## Private firmware releases
+
+This repository distributes firmware through authenticated GitHub releases while it is private. Push a semantic version tag such as `v1.2.3` to run the [firmware release workflow](.github/workflows/firmware-release.yml). It verifies the repository is private, builds the exact tagged `PROJECT_VER`, and creates or updates a **private draft** release. Draft review is for the repository owner and writers/admins; the owner must publish it manually. The workflow does not publish releases automatically, and GitHub Pages is not used.
+
+After the owner publishes the private release, collaborators with repository read access can log in to GitHub, download the ZIP and its `.sha256` file, and verify the archive before extracting it:
+
+```sh
+shasum -a 256 -c watchling-v1.2.3-esp-vocat-v1.2.zip.sha256
+```
+
+The extracted bundle runs the local installer described in [offline firmware installation](docs/getting-started.md#offline-firmware-installation). After the download, the installer needs Node.js 22 or newer and a desktop Chrome or Edge window, but no internet connection. The Mac bridge is installed and managed separately.
+
 ## Daily use
 
 A task completion triggers a chime and a short announcement. A permission request appears on the touchscreen while the terminal waits. Review the command or file summary before tapping a decision; use the terminal for questions that need a written answer. Unanswered requests return to the terminal after 120 seconds by default.
@@ -84,7 +96,7 @@ Exit any serial monitor as well. The next agent session can start the bridge aga
 | [Troubleshooting](docs/troubleshooting.md) | USB, BLE, hooks, audio and startup issues |
 | [Chatter](docs/chatter.md) | Current timing, character and clip selection |
 | [Architecture](docs/architecture.md) | Agent → bridge → USB/BLE → firmware |
-| [Development](docs/development.md) | Checks, UI simulator and audio asset tools |
+| [Development](docs/development.md) | Checks, release packaging, UI simulator and audio asset tools |
 | [Device protocol](docs/device-protocol.md) | Framing, messages and permission rules |
 | [Brand](docs/brand/README.md) | Identity, palette and image references |
 
