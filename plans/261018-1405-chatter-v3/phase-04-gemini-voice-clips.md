@@ -14,8 +14,8 @@ Design the robot voice with Gemini 3.8 Flash TTS, let the user pick it by ear, g
 approve them by ear, commit them with a manifest.
 
 **As built:** Southern, then Northern em/anh Vietnamese were tried; the user chose English with the
-`english-robot` voice (`voice_0tetlqv7unme`). 35/50 clips done; the Tier 1 limit is 100 TTS requests
-per day, so the remaining 15 (CARE_02–08, CTX_01–08) are generated the next day. Key comes from zshrc
+`english-robot` voice (`voice_0tetlqv7unme`). 39/50 clips done (CARE_02–05 added 2026-10-19, awaiting approval by ear); the Tier 1 limit is 100
+TTS requests per day, so the remaining 11 (CARE_06–08, CTX_01–08) are generated on 2026-10-20. Key comes from zshrc
 (`zsh -ic`).
 
 ## Requirements
