@@ -2,6 +2,7 @@
   "name": "watchling-bridge",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Bridges Claude Code / Codex events to Watchling, a desk robot on the ESP-VoCat (EchoEar) board",
   "type": "module",
   "engines": {

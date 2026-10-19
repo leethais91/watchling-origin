@@ -1,8 +1,8 @@
 # Third-party and generated assets
 
 This file records provenance. It does not grant rights to third-party trademarks, product
-photography or provider-generated media beyond the applicable permissions. The source-code
-license decision is separate from the items below.
+photography or provider-generated media beyond the applicable permissions. Watchling's own source
+code is covered by the [MIT License](LICENSE); the items below keep their own terms.
 
 | Files / component | Source | Notice / status |
 | --- | --- | --- |

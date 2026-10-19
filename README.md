@@ -100,7 +100,4 @@ Exit any serial monitor as well. The next agent session can start the bridge aga
 
 ## Contributing and licensing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and [SECURITY.md](SECURITY.md) for security reports. Asset sources and licensing questions are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Check the repository's license status before redistributing code or assets.
-
-The source license has not yet been selected. The remaining publication steps are tracked in
-the [release checklist](docs/release-checklist.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and [SECURITY.md](SECURITY.md) for security reports. Asset sources and licensing questions are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Watchling's source code is released under the [MIT License](LICENSE). Third-party fonts, brand marks and generated media keep their own terms; see the notices before redistributing them.

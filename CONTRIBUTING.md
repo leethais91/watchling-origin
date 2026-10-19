@@ -44,6 +44,6 @@ See [development](docs/development.md) for simulator and asset-generation detail
 
 ## Licensing
 
-The owner is choosing the project's source license before publication. See the release
-checklist for that decision; third-party notices remain separate. This paragraph will be
-updated when the source license is selected.
+Watchling is released under the [MIT License](LICENSE). By submitting a contribution, you agree
+that it is licensed under the same terms. Third-party assets keep the terms recorded in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

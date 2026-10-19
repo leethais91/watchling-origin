@@ -5,7 +5,7 @@ and generated artwork do not replace testing on an ESP-VoCat.
 
 ## Repository
 
-- [ ] Owner selects the source license; add `LICENSE` and update package metadata and documentation.
+- [x] Owner selects the source license (MIT); add `LICENSE` and update package metadata and documentation.
 - [ ] Confirm redistribution rights for generated voice/SFX, product photo and third-party marks; record the result in [asset notices](../THIRD_PARTY_NOTICES.md).
 - [ ] Run `python3 scripts/check-secrets.py --history`; review any findings without posting secret values. Consider a dedicated credential scanner as well.
 - [ ] Run the documented quick start from a fresh clone with Node 22 and ESP-IDF 5.5.
