@@ -159,3 +159,23 @@ for (const statusLine of [null, "invalid", [], { type: "command", command: 42 }]
     } finally { await f.cleanup(); }
   });
 }
+
+test("entries from a moved checkout are reported and left in place", macOnly, async () => {
+  const f = await fixture();
+  try {
+    const stale = join(f.home, "old checkout/pc-bridge/dist/hook.js");
+    const present = join(f.home, "other/pc-bridge/dist/hook.js");
+    await mkdir(dirname(present), { recursive: true });
+    await writeFile(present, "");
+    const hooks = { Stop: [{ hooks: [
+      { type: "command", command: `node "${stale}" stop` },
+      { type: "command", command: `node "${present}" stop` },
+    ] }] };
+    await f.write(f.claude, { hooks });
+    const installed = await f.invoke("install");
+    assert.ok(installed.stderr.includes(`references missing ${stale}`));
+    assert.ok(!installed.stderr.includes(present));
+    await f.invoke("uninstall");
+    assert.deepEqual(JSON.parse(await readFile(f.claude, "utf8")).hooks, hooks);
+  } finally { await f.cleanup(); }
+});

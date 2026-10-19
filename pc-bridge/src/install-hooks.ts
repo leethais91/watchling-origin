@@ -10,6 +10,7 @@
  * Idempotent: entries are recognised by the absolute path of this package's dist/ files,
  * and existing hooks from other tools are left untouched.
  */
+import { existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -85,6 +86,25 @@ const isWatchlingScript = (command: string, name: string): boolean => {
 const isOurs = (hook: HookEntry) => hook.type === "command" && typeof hook.command === "string" && isWatchlingScript(hook.command, "hook");
 const isOurStatusline = (settings: Settings) =>
   typeof settings.statusLine?.command === "string" && isWatchlingScript(settings.statusLine.command, "statusline");
+
+// A moved or deleted checkout leaves entries this checkout cannot claim. They are only
+// reported: another product may use the same layout, so removal stays manual.
+const BRIDGE_SCRIPT_PATH = /"([^"]*\/pc-bridge\/dist\/(?:hook|statusline)\.js)"|'([^']*\/pc-bridge\/dist\/(?:hook|statusline)\.js)'|(?:^|\s)([^\s"']*\/pc-bridge\/dist\/(?:hook|statusline)\.js)(?=\s|$)/g;
+function warnAboutStaleEntries(settings: Settings, path: string): void {
+  const commands = Object.values(settings.hooks ?? {}).flatMap((matchers) =>
+    matchers.flatMap((m) => m.hooks.flatMap((h) => (h.type === "command" && h.command ? [h.command] : []))));
+  if (settings.statusLine?.command) commands.push(settings.statusLine.command);
+  const stale = new Set<string>();
+  for (const command of commands) {
+    for (const match of command.matchAll(BRIDGE_SCRIPT_PATH)) {
+      const script = match[1] ?? match[2] ?? match[3];
+      if (dirname(script) !== DIST_DIR && !existsSync(script)) stale.add(script);
+    }
+  }
+  for (const script of stale) {
+    console.warn(`${path} references missing ${script}; if it is from a moved Watchling checkout, remove it manually (see docs/troubleshooting.md).`);
+  }
+}
 
 /** Reject malformed hook documents before modifying them or deciding to stop a shared service. */
 function parseSettings(text: string): Settings {
@@ -207,6 +227,7 @@ const existing = await readFile(path, "utf8").catch((err: NodeJS.ErrnoException)
   throw err;
 });
 const settings = existing ? parseSettings(existing) : {};
+warnAboutStaleEntries(settings, path);
 const backupPath = existing ? `${path}.watchling-backup-${Date.now()}` : null;
 if (backupPath) await copyFile(path, backupPath);
 
