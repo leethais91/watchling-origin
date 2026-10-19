@@ -123,6 +123,9 @@ static void quiet_set(bool quiet)
 /* esp_timer task (IMU poll). */
 static void on_imu(imu_event_t event)
 {
+    static const char *const NAMES[] = {"face down", "face up", "moved",  "tilt left",
+                                        "tilt right", "level", "shaken", "on back", "off back"};
+    ESP_LOGI(TAG, "Body: %s", NAMES[event]);
     switch (event) {
     case IMU_EVENT_FACE_DOWN:
     case IMU_EVENT_FACE_UP:
@@ -138,6 +141,16 @@ static void on_imu(imu_event_t event)
         ui_body_event(UI_BODY_TILT_RIGHT);
         break;
     case IMU_EVENT_LEVEL:
+        ui_body_event(UI_BODY_LEVEL);
+        break;
+    case IMU_EVENT_SHAKEN:
+        ui_body_event(UI_BODY_SHAKEN);
+        break;
+    case IMU_EVENT_ON_BACK:
+        ui_body_event(UI_BODY_ON_BACK);
+        break;
+    case IMU_EVENT_OFF_BACK:
+        ui_body_event(UI_BODY_OFF_BACK);
         break;
     }
 }
@@ -151,7 +164,9 @@ static void body_sensors_start(void)
         ESP_LOGW(TAG, "Status LED unavailable");
     }
     esp_err_t err = imu_start(on_imu);
-    if (err != ESP_OK) {
+    if (err == ESP_OK) {
+        ui_set_gravity_probe(imu_gravity);
+    } else {
         ESP_LOGW(TAG, "Accelerometer unavailable (%s)", esp_err_to_name(err));
     }
 }

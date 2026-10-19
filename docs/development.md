@@ -48,7 +48,7 @@ cd echoear-firmware/simulator
 ./cmake-out/dashboard_sim --ui
 ```
 
-The screenshot helper builds the simulator and applies the round screen mask. Supported options include `--stress`, `--unknown`, `--confirm`, `--pull N` and `--after-ms N`; moods include `idle`, `busy`, `sleep`, `happy`, `attention`, `error`, `surprised`. Simulator output is a host rendering, not a photograph or a hardware integration test.
+The screenshot helper builds the simulator and applies the round screen mask. Supported options include `--stress`, `--unknown`, `--confirm`, `--pull N`, `--gravity LAT,DOWN` (mg, for the rolling eyes) and `--after-ms N`; moods include `idle`, `busy`, `sleep`, `happy`, `attention`, `error`, `surprised`, `lean`, `dizzy`, `stargaze`. Simulator output is a host rendering, not a photograph or a hardware integration test.
 
 ## Audio generation
 

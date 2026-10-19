@@ -49,6 +49,8 @@ static const char *TAG = "imu";
  */
 #define AXIS_LATERAL        0
 #define AXIS_NORMAL         1
+#define AXIS_VERTICAL       2
+#define DOWN_SIGN           -1 /* standing reads Z = -1 g: screen-down is -Z */
 #define FACE_DOWN_SIGN      1
 #define TILT_SIGN           1
 
@@ -65,19 +67,28 @@ static const char *TAG = "imu";
 /* Change between two raw samples, summed over the axes, that counts as being moved. */
 #define MOVE_JERK_MG        350
 #define MOVE_COOLDOWN_US    (3 * 1000 * 1000)
+/* Shaken: this many hard jolts within the window. A single bump or lift stays "moved". */
+#define SHAKE_JERK_MG       600
+#define SHAKE_HITS          4
+#define SHAKE_WINDOW        15 /* samples, 1.5 s */
+#define SHAKE_COOLDOWN_US   (4 * 1000 * 1000)
 
 static i2c_master_dev_handle_t s_dev;
 static imu_event_cb_t s_cb;
 
-/* Poll state: esp_timer task only. */
-static bool s_primed;
-static int s_gravity[3];
+/* Poll state: esp_timer task only, except s_primed and s_gravity, which imu_gravity() reads. */
+static volatile bool s_primed;
+static volatile int s_gravity[3];
 static int s_last[3];
 static bool s_face_down;
 static int s_face_count;
+static bool s_on_back;
+static int s_back_count;
 static int s_tilt; /* -1 left, 0 level, 1 right */
 static int s_tilt_count;
 static int64_t s_moved_at;
+static int64_t s_shaken_at;
+static uint16_t s_jolts; /* one bit per recent sample: was it a hard jolt */
 
 static esp_err_t reg_write(uint8_t reg, uint8_t value)
 {
@@ -144,9 +155,32 @@ static void face_update(void)
     }
 }
 
+/* Same thresholds as face down, mirrored: the screen faces the ceiling. */
+static void back_update(void)
+{
+    int normal = -s_gravity[AXIS_NORMAL] * FACE_DOWN_SIGN;
+    bool leaving = s_on_back ? normal < FACE_DOWN_EXIT_MG : normal > FACE_DOWN_MG;
+    s_back_count = leaving ? s_back_count + 1 : 0;
+    if (s_back_count >= (s_on_back ? FACE_UP_SAMPLES : FACE_DOWN_SAMPLES)) {
+        s_on_back = !s_on_back;
+        s_back_count = 0;
+        s_cb(s_on_back ? IMU_EVENT_ON_BACK : IMU_EVENT_OFF_BACK);
+    }
+}
+
+static void shake_update(int jerk, int64_t now)
+{
+    s_jolts = (uint16_t)((s_jolts << 1 | (jerk > SHAKE_JERK_MG)) & ((1u << SHAKE_WINDOW) - 1));
+    if (__builtin_popcount(s_jolts) >= SHAKE_HITS && (s_shaken_at == 0 || now - s_shaken_at >= SHAKE_COOLDOWN_US)) {
+        s_shaken_at = now;
+        s_jolts = 0;
+        s_cb(IMU_EVENT_SHAKEN);
+    }
+}
+
 static void tilt_update(void)
 {
-    if (s_face_down || abs(s_gravity[AXIS_NORMAL]) > TILT_MAX_NORMAL_MG) {
+    if (s_face_down || s_on_back || abs(s_gravity[AXIS_NORMAL]) > TILT_MAX_NORMAL_MG) {
         return;
     }
     int lateral = s_gravity[AXIS_LATERAL] * TILT_SIGN;
@@ -188,7 +222,9 @@ static void poll_cb(void *arg)
         s_moved_at = now;
         s_cb(IMU_EVENT_MOVED);
     }
+    shake_update(jerk, now);
     face_update();
+    back_update();
     tilt_update();
 }
 
@@ -200,6 +236,17 @@ static esp_err_t device_add(i2c_master_bus_handle_t bus, uint16_t address)
         .scl_speed_hz = I2C_SPEED_HZ,
     };
     return i2c_master_bus_add_device(bus, &config, &s_dev);
+}
+
+/* Word-sized reads: a value may be one sample newer than its neighbour, which is harmless here. */
+bool imu_gravity(int *lateral_mg, int *down_mg)
+{
+    if (!s_primed) {
+        return false;
+    }
+    *lateral_mg = s_gravity[AXIS_LATERAL] * TILT_SIGN;
+    *down_mg = s_gravity[AXIS_VERTICAL] * DOWN_SIGN;
+    return true;
 }
 
 esp_err_t imu_start(imu_event_cb_t cb)

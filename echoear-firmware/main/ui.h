@@ -71,8 +71,12 @@ void ui_show_pairing(bool active, uint32_t passkey);
 /* Physical interaction picked up by the accelerometer. */
 typedef enum {
     UI_BODY_MOVED,        /* picked up or bumped: startled */
-    UI_BODY_TILT_LEFT,    /* leaning: an idle robot glances downhill */
+    UI_BODY_TILT_LEFT,    /* leaning: the face slides and looks downhill until level again */
     UI_BODY_TILT_RIGHT,
+    UI_BODY_LEVEL,        /* upright again after a tilt; rocking left and right makes it happy */
+    UI_BODY_SHAKEN,       /* shaken hard: dizzy, eyes spinning */
+    UI_BODY_ON_BACK,      /* lying on its back: gazes up at the stars */
+    UI_BODY_OFF_BACK,
 } ui_body_event_t;
 void ui_body_event(ui_body_event_t event);
 
@@ -85,3 +89,10 @@ void ui_set_quiet(bool quiet);
  */
 typedef void (*ui_needs_user_cb_t)(bool needs_user);
 void ui_set_needs_user_cb(ui_needs_user_cb_t cb);
+
+/*
+ * Called in the LVGL task a few times a second: the gravity vector in mg, `lateral_mg` toward
+ * the robot's right, `down_mg` toward the bottom of the screen. False = no reading.
+ */
+typedef bool (*ui_gravity_probe_t)(int *lateral_mg, int *down_mg);
+void ui_set_gravity_probe(ui_gravity_probe_t probe);

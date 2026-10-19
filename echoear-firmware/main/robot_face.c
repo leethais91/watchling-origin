@@ -53,6 +53,35 @@
 #define BOUNCE_PX        8
 #define BOUNCE_UP_MS     160
 #define BOUNCE_DOWN_MS   260
+#define SURPRISE_HOP_PX  16 /* surprise hops twice as high as a happy bounce */
+#define LEAN_PX          10 /* lean: the face slides this far downhill */
+#define LEAN_GAZE_PX     9  /* and the eyes look further than a glance */
+#define LEAN_MS          280
+/* Dizzy: each eye circles its spot, the two half a turn apart, while the head wobbles. */
+#define SPIN_PX          6
+#define SPIN_MS          520
+#define WOBBLE_PX        3
+#define WOBBLE_MS        260
+/*
+ * Gravity roll: the eyes chase a target set by the tilt on a damped spring (Q8 small-head px,
+ * stepped every ROLL_TICK_MS), so they overshoot a little and settle like marbles. A dead zone
+ * keeps a desk that is not quite level from nudging them. Whatever the mood and the roll add
+ * up to stays within EYE_ROAM, inside the visor.
+ */
+#define ROLL_TICK_MS     33
+#define ROLL_DEAD_MG     60
+#define ROLL_X_PX        14 /* at 1 g sideways */
+#define ROLL_Y_PX        8  /* at 1 g upside down; standing or lying flat the eyes stay level */
+#define ROLL_SPRING      40 /* /256 per tick */
+#define ROLL_DAMPING     70 /* /256 per tick */
+#define ROLL_SETTLE_Q8   16
+#define EYE_ROAM_X       11
+#define EYE_ROAM_Y       7
+
+/* Stargaze: eyes raised, a few stars around them twinkling out of step. */
+#define STARGAZE_DY      -6
+#define STAR_COUNT       4
+#define STAR_MS          900
 #define SHAKE_PX         4
 #define SHAKE_MS         45
 #define SHAKE_SWINGS     3
@@ -86,24 +115,49 @@ static const mood_style_t MOODS[] = {
     [ROBOT_MOOD_HAPPY] = {0, 0, COLOR_HAPPY, LV_OPA_TRANSP, false, true},
     [ROBOT_MOOD_ATTENTION] = {26, 34, COLOR_ATTENTION, LV_OPA_60, true, true},
     [ROBOT_MOOD_ERROR] = {0, 0, COLOR_ERROR, LV_OPA_TRANSP, false, true},
-    [ROBOT_MOOD_SURPRISED] = {30, 30, COLOR_EYE, LV_OPA_COVER, false, true},
+    [ROBOT_MOOD_SURPRISED] = {34, 34, COLOR_EYE, LV_OPA_COVER, false, true},
+    [ROBOT_MOOD_LEAN] = {22, 26, COLOR_EYE, LV_OPA_60, true, true},
+    [ROBOT_MOOD_DIZZY] = {20, 20, COLOR_EYE, LV_OPA_60, false, false},
+    [ROBOT_MOOD_STARGAZE] = {22, 30, COLOR_EYE, LV_OPA_COVER, true, true},
 };
 
-static lv_obj_t *s_rig;  /* bounces and shakes */
+/* Star centres in small-head px from the visor centre, their size, and how long each twinkle takes. */
+static const struct {
+    int8_t dx;
+    int8_t dy;
+    uint8_t px;
+    uint16_t ms;
+} STARS[STAR_COUNT] = {
+    {-44, -14, 9, STAR_MS},
+    {-4, -24, 6, STAR_MS * 13 / 10},
+    {40, -18, 10, STAR_MS * 8 / 10},
+    {46, 12, 5, STAR_MS * 11 / 10},
+};
+#define STAR_STROKE_PX   2
+
+static lv_obj_t *s_rig;  /* bounces, shakes and leans */
 static lv_obj_t *s_head; /* bobs inside the rig; parent of the eyes */
 static lv_obj_t *s_pill[2];
 static lv_obj_t *s_arc[2];
 static lv_obj_t *s_squint[2];
 static lv_obj_t *s_zzz[ZZZ_COUNT];
+static lv_obj_t *s_star[STAR_COUNT]; /* each a "+" sparkle: two crossed bars */
 static lv_timer_t *s_react_timer;
 /* lv_line keeps a pointer to its points, so they live here and are rescaled in place. */
 static lv_point_precise_t s_squint_points[2][3];
 
 static robot_mood_t s_base;
 static robot_mood_t s_mood;
+static robot_look_t s_look;
 /* Set by robot_face_react(), cleared once the base mood is back. */
 static bool s_reacting;
 static int32_t s_gaze;   /* px, positive = looking right */
+static int32_t s_gaze_y; /* px, negative = looking up */
+static int32_t s_spin;   /* dizzy orbit angle in degrees */
+/* Gravity roll, Q8 small-head px: where the eyes are heading, where they are, how fast. */
+static int32_t s_roll_target[2];
+static int32_t s_roll[2];
+static int32_t s_roll_vel[2];
 static int32_t s_closed; /* lid closure 0..100 while blinking */
 static int32_t s_scale = 1;
 static int32_t s_visor_x = VISOR_CX; /* visor centre inside s_head */
@@ -113,16 +167,29 @@ static int32_t s_home_y;
 
 /* ---------- eyes ---------- */
 
+static int32_t clamp_px(int32_t value, int32_t limit)
+{
+    return value < -limit ? -limit : value > limit ? limit : value;
+}
+
 static void eyes_layout(void)
 {
     const mood_style_t *m = &MOODS[s_mood];
     int32_t w = S(m->w);
     int32_t h = S(m->h) - (S(m->h) - EYE_CLOSED_H) * s_closed / 100;
     int32_t shape = S(SHAPE_PX);
+    int32_t look_x = clamp_px(s_gaze + (S(s_roll[0]) >> 8), S(EYE_ROAM_X));
+    int32_t look_y = clamp_px(s_gaze_y + (S(s_roll[1]) >> 8), S(EYE_ROAM_Y));
     for (int i = 0; i < 2; i++) {
-        int32_t cx = s_visor_x + (i == 0 ? -S(EYE_DX) : S(EYE_DX)) + s_gaze;
+        int32_t cx = s_visor_x + (i == 0 ? -S(EYE_DX) : S(EYE_DX)) + look_x;
+        int32_t cy = s_visor_y + look_y;
+        if (s_mood == ROBOT_MOOD_DIZZY) {
+            int32_t angle = (s_spin + i * 180) % 360;
+            cx += S(SPIN_PX) * lv_trigo_cos(angle) >> LV_TRIGO_SHIFT;
+            cy += S(SPIN_PX) * lv_trigo_sin(angle) >> LV_TRIGO_SHIFT;
+        }
         lv_obj_set_size(s_pill[i], w, h);
-        lv_obj_set_pos(s_pill[i], cx - w / 2, s_visor_y - h / 2);
+        lv_obj_set_pos(s_pill[i], cx - w / 2, cy - h / 2);
         int32_t arc_dy = s_mood == ROBOT_MOOD_SLEEP ? SLEEP_ARC_DY : HAPPY_ARC_DY;
         lv_obj_set_pos(s_arc[i], cx - shape / 2, s_visor_y - shape / 2 + S(arc_dy));
         lv_obj_set_pos(s_squint[i], cx - S(SQUINT_W) / 2, s_visor_y - S(SQUINT_H) / 2);
@@ -130,6 +197,9 @@ static void eyes_layout(void)
     for (int i = 0; i < ZZZ_COUNT; i++) {
         lv_obj_set_pos(s_zzz[i], s_visor_x + S(EYE_DX + ZZZ_DX + ZZZ_STEP_X * i),
                        s_visor_y - S(ZZZ_DY + ZZZ_STEP_Y * i));
+    }
+    for (int i = 0; i < STAR_COUNT; i++) {
+        lv_obj_set_pos(s_star[i], s_visor_x + S(STARS[i].dx - STARS[i].px / 2), s_visor_y + S(STARS[i].dy - STARS[i].px / 2));
     }
 }
 
@@ -161,6 +231,17 @@ static void eyes_scale_apply(void)
     for (int i = 0; i < ZZZ_COUNT; i++) {
         lv_obj_set_style_text_font(s_zzz[i], s_scale > 1 ? ZZZ_FONTS_FULL[i] : ZZZ_FONTS_SMALL[i], 0);
     }
+    for (int i = 0; i < STAR_COUNT; i++) {
+        int32_t px = S(STARS[i].px);
+        int32_t stroke = S(STAR_STROKE_PX);
+        lv_obj_set_size(s_star[i], px, px);
+        lv_obj_t *bar_h = lv_obj_get_child(s_star[i], 0);
+        lv_obj_t *bar_v = lv_obj_get_child(s_star[i], 1);
+        lv_obj_set_size(bar_h, px, stroke);
+        lv_obj_set_size(bar_v, stroke, px);
+        lv_obj_center(bar_h);
+        lv_obj_center(bar_v);
+    }
 }
 
 static void eyes_style(const mood_style_t *m, robot_mood_t mood)
@@ -189,6 +270,9 @@ static void eyes_style(const mood_style_t *m, robot_mood_t mood)
         lv_obj_set_hidden(s_zzz[i], mood != ROBOT_MOOD_SLEEP);
         lv_obj_set_style_text_opa(s_zzz[i], LV_OPA_TRANSP, 0);
     }
+    for (int i = 0; i < STAR_COUNT; i++) {
+        lv_obj_set_hidden(s_star[i], mood != ROBOT_MOOD_STARGAZE);
+    }
 }
 
 /* ---------- animations ---------- */
@@ -204,6 +288,13 @@ static void gaze_anim_cb(void *var, int32_t value)
 {
     LV_UNUSED(var);
     s_gaze = value;
+    eyes_layout();
+}
+
+static void spin_anim_cb(void *var, int32_t value)
+{
+    LV_UNUSED(var);
+    s_spin = value;
     eyes_layout();
 }
 
@@ -262,6 +353,37 @@ static void zzz_anim_cb(void *var, int32_t value)
     translate_set(z, LV_STYLE_TRANSLATE_X, S(ZZZ_DRIFT_PX) * value / 100);
     int32_t opa = value < 25 ? value * 4 : (100 - value) * 4 / 3;
     lv_obj_set_style_text_opa(z, (lv_opa_t)(LV_OPA_COVER * opa / 100), 0);
+}
+
+/* One star (the anim's var) fading in and out; the bars fade, not the star, so no layer is needed. */
+static void star_anim_cb(void *var, int32_t value)
+{
+    for (int i = 0; i < 2; i++) {
+        lv_obj_set_style_bg_opa(lv_obj_get_child(var, i), (lv_opa_t)value, 0);
+    }
+}
+
+static void stars_start(void)
+{
+    for (int i = 0; i < STAR_COUNT; i++) {
+        lv_anim_t a;
+        lv_anim_init(&a);
+        lv_anim_set_var(&a, s_star[i]);
+        lv_anim_set_exec_cb(&a, star_anim_cb);
+        lv_anim_set_values(&a, LV_OPA_10, LV_OPA_COVER);
+        lv_anim_set_duration(&a, STARS[i].ms);
+        lv_anim_set_reverse_duration(&a, STARS[i].ms);
+        lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+        lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+        lv_anim_start(&a);
+    }
+}
+
+static void stars_stop(void)
+{
+    for (int i = 0; i < STAR_COUNT; i++) {
+        lv_anim_delete(s_star[i], star_anim_cb);
+    }
 }
 
 /* The z's are the exception to "everything hangs off s_head": each animates itself. */
@@ -342,12 +464,45 @@ static void glance_timer_cb(lv_timer_t *timer)
     lv_anim_start(&a);
 }
 
+/* One spring step per axis; the eyes are only laid out again when a pixel actually changes. */
+static void roll_timer_cb(lv_timer_t *timer)
+{
+    LV_UNUSED(timer);
+    bool moved = false;
+    for (int i = 0; i < 2; i++) {
+        int32_t pull = s_roll_target[i] - s_roll[i];
+        if (LV_ABS(pull) < ROLL_SETTLE_Q8 && LV_ABS(s_roll_vel[i]) < ROLL_SETTLE_Q8) {
+            s_roll_vel[i] = 0;
+            continue;
+        }
+        int32_t before = S(s_roll[i]) >> 8;
+        s_roll_vel[i] += (pull * ROLL_SPRING - s_roll_vel[i] * ROLL_DAMPING) / 256;
+        s_roll[i] += s_roll_vel[i];
+        moved |= (S(s_roll[i]) >> 8) != before;
+    }
+    if (moved) {
+        eyes_layout();
+    }
+}
+
+/* mg past the dead zone, scaled so 1 g gives `px_at_1g` (Q8). */
+static int32_t roll_axis(int32_t mg, int32_t px_at_1g)
+{
+    int32_t past = LV_ABS(mg) - ROLL_DEAD_MG;
+    if (past <= 0) {
+        return 0;
+    }
+    int32_t q8 = past * px_at_1g * 256 / (1000 - ROLL_DEAD_MG);
+    return mg < 0 ? -q8 : q8;
+}
+
 /* ---------- moods ---------- */
 
 static void mood_apply(robot_mood_t mood, robot_look_t look)
 {
     const mood_style_t *m = &MOODS[mood];
     s_mood = mood;
+    s_look = look;
 
     lv_anim_delete(s_head, closed_anim_cb);
     lv_anim_delete(s_head, gaze_anim_cb);
@@ -355,11 +510,18 @@ static void mood_apply(robot_mood_t mood, robot_look_t look)
     lv_anim_delete(s_head, bounce_anim_cb);
     lv_anim_delete(s_head, shake_anim_cb);
     lv_anim_delete(s_head, breath_anim_cb);
+    lv_anim_delete(s_head, spin_anim_cb);
     zzz_stop();
+    stars_stop();
     translate_set(s_rig, LV_STYLE_TRANSLATE_X, 0);
     translate_set(s_rig, LV_STYLE_TRANSLATE_Y, 0);
     s_closed = 0;
-    s_gaze = look == ROBOT_LOOK_LEFT ? -S(GAZE_PX) : look == ROBOT_LOOK_RIGHT ? S(GAZE_PX) : 0;
+    s_spin = 0;
+    s_gaze_y = mood == ROBOT_MOOD_STARGAZE ? S(STARGAZE_DY) : 0;
+    s_gaze = mood == ROBOT_MOOD_LEAN       ? 0
+             : look == ROBOT_LOOK_LEFT  ? -S(GAZE_PX)
+             : look == ROBOT_LOOK_RIGHT ? S(GAZE_PX)
+                                        : 0;
 
     eyes_style(m, mood);
     eyes_layout();
@@ -385,11 +547,33 @@ static void mood_apply(robot_mood_t mood, robot_look_t look)
         break;
     case ROBOT_MOOD_HAPPY:
     case ROBOT_MOOD_SURPRISED:
-        anim_prepare(&a, bounce_anim_cb, 0, -S(BOUNCE_PX), BOUNCE_UP_MS);
+        anim_prepare(&a, bounce_anim_cb, 0, -S(mood == ROBOT_MOOD_HAPPY ? BOUNCE_PX : SURPRISE_HOP_PX),
+                     BOUNCE_UP_MS);
         lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
         lv_anim_set_reverse_duration(&a, BOUNCE_DOWN_MS);
         lv_anim_set_repeat_count(&a, mood == ROBOT_MOOD_HAPPY ? 2 : 1);
         lv_anim_start(&a);
+        break;
+    case ROBOT_MOOD_LEAN: {
+        /* Slide in rather than jump: the gaze set above is only where the eyes end up. */
+        int32_t dir = look == ROBOT_LOOK_LEFT ? -1 : 1;
+        anim_prepare(&a, gaze_anim_cb, 0, dir * S(LEAN_GAZE_PX), LEAN_MS);
+        lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+        lv_anim_start(&a);
+        anim_prepare(&a, shake_anim_cb, 0, dir * S(LEAN_PX), LEAN_MS);
+        lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+        lv_anim_start(&a);
+        break;
+    }
+    case ROBOT_MOOD_DIZZY:
+        anim_prepare(&a, spin_anim_cb, 0, 359, SPIN_MS);
+        lv_anim_set_path_cb(&a, lv_anim_path_linear);
+        lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+        lv_anim_start(&a);
+        anim_ping_pong(shake_anim_cb, -S(WOBBLE_PX), S(WOBBLE_PX), WOBBLE_MS);
+        break;
+    case ROBOT_MOOD_STARGAZE:
+        stars_start();
         break;
     case ROBOT_MOOD_ERROR:
         anim_prepare(&a, shake_anim_cb, -S(SHAKE_PX), S(SHAKE_PX), SHAKE_MS);
@@ -451,10 +635,23 @@ lv_obj_t *robot_face_create(lv_obj_t *parent, int32_t x, int32_t y)
         lv_label_set_text(s_zzz[i], i == ZZZ_COUNT - 1 ? "Z" : "z");
         lv_obj_set_style_text_color(s_zzz[i], lv_color_hex(COLOR_ZZZ), 0);
     }
+    for (int i = 0; i < STAR_COUNT; i++) {
+        lv_obj_t *star = lv_obj_create(s_head);
+        lv_obj_remove_style_all(star);
+        lv_obj_set_scrollable(star, false);
+        for (int bar = 0; bar < 2; bar++) {
+            lv_obj_t *b = lv_obj_create(star);
+            lv_obj_remove_style_all(b);
+            lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
+            lv_obj_set_style_bg_color(b, lv_color_hex(COLOR_ZZZ), 0);
+        }
+        s_star[i] = star;
+    }
     eyes_scale_apply();
 
     lv_timer_create(blink_timer_cb, BLINK_MIN_MS, NULL);
     lv_timer_create(glance_timer_cb, GLANCE_MIN_MS, NULL);
+    lv_timer_create(roll_timer_cb, ROLL_TICK_MS, NULL);
     s_react_timer = lv_timer_create(react_timer_cb, 1000, NULL);
     lv_timer_pause(s_react_timer);
 
@@ -486,9 +683,28 @@ void robot_face_react(robot_mood_t mood, robot_look_t look, uint32_t hold_ms)
     }
 }
 
+void robot_face_react_end(void)
+{
+    if (s_reacting) {
+        react_timer_cb(s_react_timer);
+    }
+}
+
+void robot_face_set_gravity(int32_t lateral_mg, int32_t down_mg)
+{
+    s_roll_target[0] = roll_axis(lateral_mg, ROLL_X_PX);
+    /* Only upside down lifts the eyes; upright or flat on its back they stay level. */
+    s_roll_target[1] = down_mg < 0 ? roll_axis(down_mg, ROLL_Y_PX) : 0;
+}
+
 bool robot_face_is_reacting(void)
 {
     return s_reacting;
+}
+
+robot_mood_t robot_face_mood(void)
+{
+    return s_mood;
 }
 
 void robot_face_set_fullscreen(bool on)
@@ -513,5 +729,5 @@ void robot_face_set_fullscreen(bool on)
     /* Restart the current mood so every running motion picks up the new amplitude. */
     lv_anim_delete(s_head, bob_anim_cb);
     translate_set(s_head, LV_STYLE_TRANSLATE_Y, 0);
-    mood_apply(s_mood, ROBOT_LOOK_CENTER);
+    mood_apply(s_mood, s_look);
 }

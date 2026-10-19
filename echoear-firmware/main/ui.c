@@ -56,7 +56,14 @@
 #define FACE_IDLE_MS      (30 * 1000)
 #define DOZE_IDLE_MS      (5 * 60 * 1000)
 #define SURPRISED_MS      1200
-#define TILT_GLANCE_MS    3000
+/* A lean lasts until the body is level again; this only covers a missed LEVEL event. */
+#define TILT_LEAN_MAX_MS  (20 * 1000)
+#define DIZZY_MS          2800
+#define GRAVITY_POLL_MS   100 /* the accelerometer is polled at 10 Hz */
+/* Rocking: this many tilts, each the other way and within ROCK_GAP_MS of the last, cheers it up. */
+#define ROCK_SWINGS       3
+#define ROCK_GAP_MS       2500
+#define ROCK_HAPPY_MS     2500
 #define QUIET_REACT_MS    1500
 
 enum { AGENT_CLAUDE, AGENT_CODEX, AGENT_COUNT };
@@ -78,10 +85,16 @@ static bool s_bridge_linked;
 static uint32_t s_last_activity;
 static bool s_face_mode;
 
+/* Rocking detection: direction (-1 left, 1 right) and lv_tick of the latest tilt. */
+static int s_rock_dir;
+static uint32_t s_rock_at;
+static int s_rock_swings;
+
 /* lv_tick of an attention event nobody has answered by touch yet; 0 = none. */
 static uint32_t s_attention_since;
 static bool s_needs_user;
 static ui_needs_user_cb_t s_on_needs_user;
+static ui_gravity_probe_t s_gravity_probe;
 
 /* Touch-down y of a pull that started at the top edge; -1 while the touch is a plain poke. */
 static int32_t s_pull_start_y = -1;
@@ -603,22 +616,89 @@ void ui_show_pairing(bool active, uint32_t passkey)
     bsp_display_unlock();
 }
 
+/* Faces the body itself causes, as opposed to an agent's reactions. */
+static bool body_mood(robot_mood_t mood)
+{
+    return mood == ROBOT_MOOD_SURPRISED || mood == ROBOT_MOOD_LEAN || mood == ROBOT_MOOD_DIZZY ||
+           mood == ROBOT_MOOD_STARGAZE;
+}
+
+/*
+ * The body may take over the idle or busy face and any body face, but an agent's reaction
+ * (happy, attention, error, a speech mood) and sleep win over it.
+ */
+static bool body_may_react(void)
+{
+    robot_mood_t shown = robot_face_mood();
+    return robot_face_is_reacting() ? body_mood(shown) : shown == ROBOT_MOOD_IDLE || shown == ROBOT_MOOD_BUSY;
+}
+
+/* True once the tilts have swung back and forth ROCK_SWINGS times in a row. */
+static bool rock_note(int dir)
+{
+    bool swing = dir != s_rock_dir && s_rock_at != 0 && lv_tick_elaps(s_rock_at) < ROCK_GAP_MS;
+    s_rock_swings = swing ? s_rock_swings + 1 : 1;
+    s_rock_dir = dir;
+    s_rock_at = lv_tick_get();
+    if (s_rock_swings < ROCK_SWINGS) {
+        return false;
+    }
+    s_rock_swings = 0;
+    return true;
+}
+
+static void react_end_if(robot_mood_t mood)
+{
+    if (robot_face_is_reacting() && robot_face_mood() == mood) {
+        robot_face_react_end();
+    }
+}
+
 void ui_body_event(ui_body_event_t event)
 {
     bsp_display_lock(0);
-    activity_note();
+    /*
+     * Counts as activity, but keeps the fullscreen face: picking the robot up should make
+     * the big face react, not swap it for the small dashboard head.
+     */
+    s_last_activity = lv_tick_get();
     robot_base_update(); /* wakes a dozing robot first; a base change ends any reaction */
+    robot_mood_t shown = robot_face_mood();
     switch (event) {
     case UI_BODY_MOVED:
-        robot_face_react(ROBOT_MOOD_SURPRISED, ROBOT_LOOK_CENTER, SURPRISED_MS);
+        /* Tilting, shaking or laying it down also jolts the sensor: keep those faces. */
+        if (!robot_face_is_reacting() || !body_mood(shown) || shown == ROBOT_MOOD_SURPRISED) {
+            robot_face_react(ROBOT_MOOD_SURPRISED, ROBOT_LOOK_CENTER, SURPRISED_MS);
+        }
         break;
     case UI_BODY_TILT_LEFT:
-    case UI_BODY_TILT_RIGHT:
-        /* Only a free idle robot glances: an agent's reaction or the busy scan wins. */
-        if (robot_base_mood() == ROBOT_MOOD_IDLE && !robot_face_is_reacting()) {
-            robot_face_react(ROBOT_MOOD_IDLE, event == UI_BODY_TILT_LEFT ? ROBOT_LOOK_LEFT : ROBOT_LOOK_RIGHT,
-                             TILT_GLANCE_MS);
+    case UI_BODY_TILT_RIGHT: {
+        int dir = event == UI_BODY_TILT_LEFT ? -1 : 1;
+        if (!body_may_react()) {
+            rock_note(dir);
+        } else if (rock_note(dir)) {
+            robot_face_react(ROBOT_MOOD_HAPPY, ROBOT_LOOK_CENTER, ROCK_HAPPY_MS);
+        } else {
+            robot_face_react(ROBOT_MOOD_LEAN, dir < 0 ? ROBOT_LOOK_LEFT : ROBOT_LOOK_RIGHT, TILT_LEAN_MAX_MS);
         }
+        break;
+    }
+    case UI_BODY_LEVEL:
+        react_end_if(ROBOT_MOOD_LEAN);
+        break;
+    case UI_BODY_SHAKEN:
+        if (body_may_react()) {
+            robot_face_react(ROBOT_MOOD_DIZZY, ROBOT_LOOK_CENTER, DIZZY_MS);
+        }
+        break;
+    case UI_BODY_ON_BACK:
+        /* Until it is picked up again, or until it dozes off under the stars. */
+        if (body_may_react()) {
+            robot_face_react(ROBOT_MOOD_STARGAZE, ROBOT_LOOK_CENTER, 0);
+        }
+        break;
+    case UI_BODY_OFF_BACK:
+        react_end_if(ROBOT_MOOD_STARGAZE);
         break;
     }
     bsp_display_unlock();
@@ -633,6 +713,26 @@ void ui_set_quiet(bool quiet)
     activity_note();
     robot_base_update();
     robot_face_react(quiet ? ROBOT_MOOD_SLEEP : ROBOT_MOOD_HAPPY, ROBOT_LOOK_CENTER, QUIET_REACT_MS);
+    bsp_display_unlock();
+}
+
+/* LVGL task: hands the latest gravity to the face, whose eyes roll toward it. */
+static void gravity_timer_cb(lv_timer_t *timer)
+{
+    int lateral_mg;
+    int down_mg;
+    if (s_gravity_probe != NULL && s_gravity_probe(&lateral_mg, &down_mg)) {
+        robot_face_set_gravity(lateral_mg, down_mg);
+    }
+}
+
+void ui_set_gravity_probe(ui_gravity_probe_t probe)
+{
+    bsp_display_lock(0);
+    if (s_gravity_probe == NULL) {
+        lv_timer_create(gravity_timer_cb, GRAVITY_POLL_MS, NULL);
+    }
+    s_gravity_probe = probe;
     bsp_display_unlock();
 }
 

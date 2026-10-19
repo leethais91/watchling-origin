@@ -20,7 +20,10 @@ typedef enum {
     ROBOT_MOOD_HAPPY,     /* task finished */
     ROBOT_MOOD_ATTENTION, /* waiting for the user */
     ROBOT_MOOD_ERROR,
-    ROBOT_MOOD_SURPRISED, /* poked: wide round eyes and a hop */
+    ROBOT_MOOD_SURPRISED, /* poked or picked up: wide round eyes and a big hop */
+    ROBOT_MOOD_LEAN,      /* body tilted: the whole face slides downhill, eyes looking that way */
+    ROBOT_MOOD_DIZZY,     /* shaken: eyes circling out of step, the head wobbling */
+    ROBOT_MOOD_STARGAZE,  /* on its back: eyes up, stars twinkling around them */
 } robot_mood_t;
 
 /* Where the robot looks while reacting: Claude's arc is on the left, Codex's on the right. */
@@ -39,8 +42,20 @@ void robot_face_set_base(robot_mood_t mood);
 /* Shows a reaction for `hold_ms` (0 = until the next reaction or base change), then the base. */
 void robot_face_react(robot_mood_t mood, robot_look_t look, uint32_t hold_ms);
 
+/* Ends a running reaction now and shows the base mood. */
+void robot_face_react_end(void);
+
 /* A reaction is showing instead of the base mood. */
 bool robot_face_is_reacting(void);
+
+/* The mood on screen: the reaction while one runs, else the base. */
+robot_mood_t robot_face_mood(void);
+
+/*
+ * Gravity in mg (`lateral_mg` toward the robot's right, `down_mg` toward the bottom of the
+ * screen). The eyes roll toward it on a spring, like marbles, on top of whatever the mood does.
+ */
+void robot_face_set_gravity(int32_t lateral_mg, int32_t down_mg);
 
 /*
  * Fullscreen: drops the helmet and draws the eyes 3x larger, centred on the parent, so the

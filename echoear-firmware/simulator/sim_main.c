@@ -9,8 +9,9 @@
  *   --ui                              firmware UI (ui.c) as at boot; try the pull-down with the mouse
  *   --pull N                          settings pull indicator for a drag of N px from the top edge
  *   --settings                        settings screen open
- *   --mood NAME                       robot mood: idle busy sleep happy attention error surprised
+ *   --mood NAME                       robot mood: idle busy sleep happy attention error surprised lean dizzy stargaze
  *   --face                            fullscreen face mode (the dashboard after 30 s of quiet)
+ *   --gravity LAT,DOWN                gravity in mg for the rolling eyes, e.g. 500,866 = tilted 30 deg right
  *   --after-ms N                      with --shot: let animations run N ms before capturing
  *                                     (default 700: the usage arcs sweep in over 600 ms)
  */
@@ -38,7 +39,8 @@ static const char *const MOOD_NAMES[] = {
     [ROBOT_MOOD_IDLE] = "idle",       [ROBOT_MOOD_BUSY] = "busy",
     [ROBOT_MOOD_SLEEP] = "sleep",     [ROBOT_MOOD_HAPPY] = "happy",
     [ROBOT_MOOD_ATTENTION] = "attention", [ROBOT_MOOD_ERROR] = "error",
-    [ROBOT_MOOD_SURPRISED] = "surprised",
+    [ROBOT_MOOD_SURPRISED] = "surprised", [ROBOT_MOOD_LEAN] = "lean",
+    [ROBOT_MOOD_DIZZY] = "dizzy", [ROBOT_MOOD_STARGAZE] = "stargaze",
 };
 #define MOOD_COUNT ((int)(sizeof(MOOD_NAMES) / sizeof(MOOD_NAMES[0])))
 
@@ -159,6 +161,8 @@ int main(int argc, char **argv)
     int32_t pull = 0;
     uint32_t after_ms = SHOT_SETTLE_MS;
     int mood = -1;
+    int gravity_lat = 0;
+    int gravity_down = 1000;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--shot") == 0 && i + 1 < argc) {
             shot_path = argv[++i];
@@ -180,10 +184,12 @@ int main(int argc, char **argv)
             face = true;
         } else if (strcmp(argv[i], "--mood") == 0 && i + 1 < argc && (mood = mood_from_name(argv[++i])) >= 0) {
             continue;
+        } else if (strcmp(argv[i], "--gravity") == 0 && i + 1 < argc &&
+                   sscanf(argv[++i], "%d,%d", &gravity_lat, &gravity_down) == 2) {
         } else if (strcmp(argv[i], "--after-ms") == 0 && i + 1 < argc) {
             after_ms = (uint32_t)strtoul(argv[++i], NULL, 10);
         } else {
-            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown | --confirm | --pairing | --ui] [--pull N | --settings] [--mood NAME] [--face]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--shot out.ppm [--after-ms N]] [--stress | --unknown | --confirm | --pairing | --ui] [--pull N | --settings] [--mood NAME] [--face] [--gravity LAT,DOWN]\n", argv[0]);
             return 2;
         }
     }
@@ -258,6 +264,7 @@ int main(int argc, char **argv)
         settings_screen_pull(pull);
     }
 
+    robot_face_set_gravity(gravity_lat, gravity_down);
     if (mood >= 0) {
         mood_show((robot_mood_t)mood);
     } else if (shot_path == NULL) {
