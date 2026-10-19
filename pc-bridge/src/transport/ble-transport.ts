@@ -112,7 +112,8 @@ export class BleTransport extends EventEmitter<LinkEvents> implements DeviceLink
         await noble.stopScanningAsync();
         if (found) await this.open(found);
       } catch (err) {
-        this.emit("log", `BLE connect failed: ${(err as Error).message}`);
+        // noble can reject with a bare string or code instead of an Error.
+        this.emit("log", `BLE connect failed: ${err instanceof Error ? err.message : String(err)}`);
         await found?.disconnectAsync().catch(() => {});
         this.peripheral = null;
         await sleep(RECONNECT_INTERVAL_MS);
