@@ -15,9 +15,10 @@ npm run build
 
 `npm run dev` starts the TypeScript bridge directly; `npm start` runs `dist/bridge.js`. Installed agent hooks always point to built JavaScript, so rebuild after editing source. Keep `pc-bridge/assets/` next to the built bridge: chatter assets are loaded relative to the package directory.
 
-The GitHub [CI workflow](../.github/workflows/ci.yml) runs these bridge checks on macOS with
-Node 22, builds firmware for ESP32-S3 in ESP-IDF 5.5, and checks credential patterns across
-reachable Git history. It never flashes hardware or installs hooks in a real agent profile.
+The GitHub [CI workflow](../.github/workflows/ci.yml) runs on pull requests and manual dispatch
+(`workflow_dispatch`): it runs bridge checks on macOS with Node 22, builds firmware for ESP32-S3
+in ESP-IDF 5.5, and checks credential patterns across reachable Git history. It never flashes
+hardware or installs hooks in a real agent profile.
 The firmware job follows [Espressif's CI action](https://github.com/espressif/esp-idf-ci-action);
 Node setup and npm caching use [GitHub's setup-node action](https://github.com/actions/setup-node).
 
