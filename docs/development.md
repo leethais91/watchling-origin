@@ -21,41 +21,34 @@ reachable Git history. It never flashes hardware or installs hooks in a real age
 The firmware job follows [Espressif's CI action](https://github.com/espressif/esp-idf-ci-action);
 Node setup and npm caching use [GitHub's setup-node action](https://github.com/actions/setup-node).
 
-## Private firmware release packaging
+## Firmware release packaging
 
-The [tag workflow](../.github/workflows/firmware-release.yml) accepts semantic version tags such
-as `v1.2.3`, requires the GitHub repository to remain private, builds with ESP-IDF 5.5 and
-`idf-component-manager==2.5.2`, and creates or updates a private draft release. The owner reviews
-and publishes the draft manually. It does not publish automatically or use GitHub Pages. Packaging
-is artifact preparation; it does not prove USB, Bluetooth, audio or touchscreen behavior on
-hardware.
-
-To reproduce a release bundle locally, use Node 22 or newer and a sourced ESP-IDF environment:
+Prebuilt firmware release bundles are built locally on macOS rather than in GitHub Actions to
+avoid slow and costly cloud firmware builds. Run the release script from the repository root with
+Node 22 or newer and an installed ESP-IDF 5.5 environment:
 
 ```sh
-VERSION=v1.2.3
-COMMIT=$(git rev-parse HEAD)
-. scripts/idf-env.sh
-python3 -m pip install idf-component-manager==2.5.2
-npm --prefix web-installer ci
-npm --prefix web-installer test
-npm --prefix web-installer run build
-cd echoear-firmware
-idf.py -DPROJECT_VER="$VERSION" build
-python3 ../scripts/package-firmware-release.py \
-  --build-dir build \
-  --web-dir ../web-installer/dist \
-  --output-dir ../release-output \
-  --source-root .. \
-  --idf-path "$IDF_PATH" \
-  --version "$VERSION" \
-  --commit "$COMMIT"
+./scripts/build-firmware-release.sh v1.2.3
 ```
+
+If `HEAD` already has an exact semantic version tag (`vX.Y.Z`), the tag argument can be omitted.
+By default the script requires a clean working tree, builds and tests `web-installer/`, runs the
+packager unit tests, loads `scripts/idf-env.sh`, ensures `idf-component-manager==2.5.2` is present
+in the active ESP-IDF Python environment, compiles `echoear-firmware/` with `-DPROJECT_VER`,
+packages the bundle into `release-output/`, and verifies the `.zip.sha256` checksum.
+
+Supported options:
+
+- `--output-dir <dir>` — write the bundle, `.zip`, and `.zip.sha256` to a custom directory.
+- `--clean` — run `idf.py fullclean` before building firmware.
+- `--skip-tests` — skip `web-installer` and `scripts/tests` unit tests when iterating locally.
+- `--allow-dirty` — allow packaging with uncommitted local changes or a tag not pointing at `HEAD`.
+- `--upload-draft` — create or update a GitHub draft release via `gh release` and attach the verified `.zip` and `.zip.sha256`.
 
 The [package script](../scripts/package-firmware-release.py) reads ESP-IDF's generated
 `build/flasher_args.json` and copies every flash part at its generated offset. Do not supply
-hand-written offsets. It writes the ZIP and matching `.zip.sha256` file under `release-output/`;
-verify the ZIP before sharing it with an authenticated repository user.
+hand-written offsets. Packaging is artifact preparation; it does not prove USB, Bluetooth, audio
+or touchscreen behavior on hardware.
 
 From the root, run the local repository check with:
 

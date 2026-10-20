@@ -11,9 +11,9 @@ Watchling targets the **ESP-VoCat V1.2**, formerly named EchoEar. The existing `
 | Display / touch | 360 × 360 round display; ST77916 LCD, CST816S touch |
 | Audio | ESP-VoCat BSP codecs (ES8311 / ES7210) and built-in speaker |
 | Battery status | BQ27220 fuel gauge, hidden if unavailable |
-| Board support | `espressif/esp_vocat`, configured in `main/idf_component.yml` |
+| Board support | `espressif/esp_vocat` ([ESP-VoCat / EchoEar hardware reference](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/echoear/index.html)), configured in `main/idf_component.yml` |
 
-The physical enclosure is nearly round with two small cat ears. The white robot head shown inside the dashboard is screen artwork. The [brand reference](brand/references/esp-vocat.avif) and generated banner are visual references, not evidence of hardware testing. Other revisions and generic ESP32-S3 boards are not established targets of this configuration.
+The physical enclosure is nearly round with two small cat ears. The white robot head shown inside the dashboard is screen artwork. The [README banner](images/watchling-readme-banner.png) is a concept illustration, not a hardware test photograph. Other revisions and generic ESP32-S3 boards are not established targets of this configuration.
 
 ## USB
 

@@ -36,4 +36,4 @@ Lines can change face mood or gaze while playing. Eligible emotions have a 25% c
 
 Edit the catalog, generate the corresponding WAV files, and update `pc-bridge/assets/manifest.json`. The manifest records the voice ID and text hashes. Do not reuse a line ID for different text without regenerating its clip. See [development](development.md#audio-generation) for tool locations and prerequisites.
 
-Timing: `pc-bridge/src/chatter/chatter.ts`. Selection: `pc-bridge/src/chatter/chatter-lines.ts`. Loading and emotion mapping: `pc-bridge/src/chatter/chatter-clips.ts`. Earlier design proposals are preserved in [archive](archive/README.md); this page documents the implementation.
+Timing: `pc-bridge/src/chatter/chatter.ts`. Selection: `pc-bridge/src/chatter/chatter-lines.ts`. Loading and emotion mapping: `pc-bridge/src/chatter/chatter-clips.ts`.

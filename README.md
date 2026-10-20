@@ -1,8 +1,8 @@
 # Watchling
 
-![Watchling on ESP-VoCat — a tiny companion for your coding agents](docs/brand/assets/watchling-readme-banner.png)
+![Watchling on ESP-VoCat — a tiny companion for your coding agents](docs/images/watchling-readme-banner.png)
 
-*Concept illustration based on the ESP-VoCat product reference and Watchling UI mockups. [Brand direction](docs/brand/README.md).*
+*Concept illustration based on the ESP-VoCat enclosure and Watchling UI.*
 
 A tiny desk companion for **Claude Code and Codex CLI**, built for the **ESP-VoCat V1.2** (formerly EchoEar). See agent activity and usage, hear task notifications, and answer permission requests on its touchscreen.
 
@@ -13,7 +13,7 @@ A tiny desk companion for **Claude Code and Codex CLI**, built for the **ESP-VoC
 - Connects over USB, or over paired Bluetooth LE once you switch Bluetooth on in Settings; USB is preferred when both are up.
 - Plays notification chimes and USB-only spoken announcements.
 - Blinks, looks around, reacts to work, and plays prerecorded English chatter during quiet periods.
-- Offers brightness, volume and Voice controls in a pull-down Settings screen.
+- Offers brightness, volume, Voice and Bluetooth controls in a pull-down Settings screen.
 
 | Dashboard | Settings |
 | --- | --- |
@@ -40,16 +40,32 @@ It also reacts to touch and motion:
 | Component | Requirement |
 | --- | --- |
 | Host | macOS; automatic bridge startup uses launchd and speech uses `say` |
-| Hardware | ESP-VoCat V1.2, ESP32-S3, 16 MB flash / 16 MB octal PSRAM |
-| Bridge | Node.js 22 or newer and npm |
-| Firmware | ESP-IDF 5.5, ESP-VoCat BSP, LVGL 9.6 |
+| Hardware | [ESP-VoCat V1.2](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/echoear/index.html) (EchoEar), ESP32-S3, 16 MB flash / 16 MB octal PSRAM |
+| Bridge | Node.js 22 or newer, npm, and Xcode Command Line Tools (`xcode-select --install`) |
+| Firmware | Prebuilt offline web installer (Chrome/Edge), or ESP-IDF 5.5 to build from source |
 | Agents | Claude Code terminal integration; Codex CLI session files and optional permission hooks |
 
 Normal operation needs **no Gemini or ElevenLabs API keys**. Those services are used only by developer tools to regenerate bundled audio. Linux and Windows host integration are not currently supported. Wi-Fi is not implemented; speech is unavailable over BLE.
 
 ## Get started
 
-Download or clone this repository, then follow [the installation guide](docs/getting-started.md) to build and flash the firmware. From the repository root, prepare the bridge:
+### 1. Flash the firmware
+
+- **Option A — Prebuilt release bundle (recommended):** Download `watchling-<version>-esp-vocat-v1.2.zip` and its `.sha256` file from Releases, verify the checksum, and launch the local browser installer:
+
+  ```sh
+  shasum -a 256 -c watchling-v1.2.3-esp-vocat-v1.2.zip.sha256
+  unzip watchling-v1.2.3-esp-vocat-v1.2.zip
+  cd watchling-v1.2.3-esp-vocat-v1.2
+  node serve-installer.mjs
+  ```
+
+  Open `http://127.0.0.1:8765` in desktop Chrome or Edge, click **Connect & install**, and select the ESP-VoCat. See [offline firmware installation](docs/getting-started.md#1-install-firmware-option-a-prebuilt-release-bundle) for details.
+- **Option B — Build from source:** Follow [building and flashing with ESP-IDF 5.5](docs/getting-started.md#1b-build-and-flash-firmware-from-source-option-b-esp-idf).
+
+### 2. Build and run the Mac bridge
+
+Clone this repository, then from the repository root prepare the bridge:
 
 ```sh
 cd pc-bridge
@@ -65,7 +81,11 @@ npm run list-ports
 WATCHLING_BLE=off npm start
 ```
 
-The dashboard should receive its clock and connection status. Stop the foreground bridge with Ctrl-C before enabling automatic startup. Install the integration for the agent you use:
+The dashboard should receive its clock and connection status. Stop the foreground bridge with Ctrl-C before enabling automatic startup.
+
+### 3. Enable agent integration
+
+Install the integration for the agent you use:
 
 ```sh
 npm run hooks:install          # Claude Code
@@ -73,18 +93,6 @@ npm run hooks:install:codex    # Codex CLI
 ```
 
 These commands modify per-user agent settings, create backups and register a shared macOS launch agent. Read [what the installer changes](docs/getting-started.md#agent-integrations) first. Start a new agent session to start the bridge automatically.
-
-## Private firmware releases
-
-This repository distributes firmware through authenticated GitHub releases while it is private. Push a semantic version tag such as `v1.2.3` to run the [firmware release workflow](.github/workflows/firmware-release.yml). It verifies the repository is private, builds the exact tagged `PROJECT_VER`, and creates or updates a **private draft** release. Draft review is for the repository owner and writers/admins; the owner must publish it manually. The workflow does not publish releases automatically, and GitHub Pages is not used.
-
-After the owner publishes the private release, collaborators with repository read access can log in to GitHub, download the ZIP and its `.sha256` file, and verify the archive before extracting it:
-
-```sh
-shasum -a 256 -c watchling-v1.2.3-esp-vocat-v1.2.zip.sha256
-```
-
-The extracted bundle runs the local installer described in [offline firmware installation](docs/getting-started.md#offline-firmware-installation). After the download, the installer needs Node.js 22 or newer and a desktop Chrome or Edge window, but no internet connection. The Mac bridge is installed and managed separately.
 
 ## Daily use
 
@@ -114,7 +122,6 @@ Exit any serial monitor before flashing. The next agent session also starts the 
 | [Architecture](docs/architecture.md) | Agent → bridge → USB/BLE → firmware |
 | [Development](docs/development.md) | Checks, release packaging, UI simulator and audio asset tools |
 | [Device protocol](docs/device-protocol.md) | Framing, messages and permission rules |
-| [Brand](docs/brand/README.md) | Identity, palette and image references |
 
 ## Project layout
 
@@ -122,10 +129,10 @@ Exit any serial monitor before flashing. The next agent session also starts the 
 | --- | --- |
 | `echoear-firmware/` | ESP-IDF firmware and host UI simulator |
 | `pc-bridge/` | TypeScript bridge, hooks, speech and bundled chatter clips |
-| `scripts/idf-env.sh` | Loads an installed ESP-IDF environment |
-| `docs/` | Maintained guides; historical proposals are in `docs/archive/` |
-| `plans/` | Implementation history and decisions |
+| `web-installer/` | Self-contained local Web Serial firmware installer |
+| `scripts/` | ESP-IDF loader (`idf-env.sh`) and local release builder (`build-firmware-release.sh`) |
+| `docs/` | Setup, hardware, configuration, troubleshooting, architecture and protocol guides |
 
 ## Contributing and licensing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and [SECURITY.md](SECURITY.md) for security reports. Asset sources and licensing questions are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Watchling's source code is released under the [MIT License](LICENSE). Third-party fonts, brand marks and generated media keep their own terms; see the notices before redistributing them.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and [SECURITY.md](SECURITY.md) for security reports. Third-party fonts, icons and dependency licenses are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Watchling's source code and project-authored assets are released under the [MIT License](LICENSE).

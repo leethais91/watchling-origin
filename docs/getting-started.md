@@ -4,17 +4,18 @@ Build the firmware for ESP-VoCat V1.2, connect it to a Mac, and enable the agent
 
 ## Prerequisites
 
-- ESP-VoCat V1.2 and a USB-C cable that carries data; see [hardware](hardware.md).
-- macOS, Node.js 22 or newer and npm. The bridge is not supported as a complete installation on Linux or Windows.
-- An installed ESP-IDF **5.5** environment with the ESP32-S3 toolchain. Follow [Espressif's macOS setup instructions](https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32s3/get-started/linux-macos-setup.html), including `./install.sh esp32s3`; the helper below loads an existing installation. Keep the SDK and project paths free of spaces, as required by the ESP-IDF build system.
-- [uv](https://docs.astral.sh/uv/) with its managed Python 3.12: `uv python install 3.12`. ESP-IDF supports Python 3.9–3.13, and newer Homebrew Pythons break its setup, so `scripts/idf-env.sh` always runs ESP-IDF on that uv-managed interpreter and never on a system Python. Set `WATCHLING_IDF_PYTHON` to pick another supported version. ESP-IDF keeps one Python environment per version: create it with the same interpreter by running `install.sh esp32s3` (or `python3 "$IDF_PATH/tools/idf_tools.py" install-python-env`) in a shell that sourced the helper.
+- [ESP-VoCat V1.2](hardware.md) and a USB-C cable that carries data.
+- macOS, Node.js 22 or newer, npm, and Apple's Command Line Tools (`xcode-select --install`, needed when npm compiles native serial/BLE modules). The bridge is not supported on Linux or Windows.
 - Claude Code terminal sessions or Codex CLI. Codex permission integration requires a version with `PermissionRequest` hooks (the project targets 0.162+); the integration depends on the agent's hook and session formats.
+- **Only if building firmware from source (Option B):**
+  - An installed ESP-IDF **5.5** environment with the ESP32-S3 toolchain. Follow [Espressif's macOS setup instructions](https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32s3/get-started/linux-macos-setup.html), including `./install.sh esp32s3`; the helper below loads an existing installation. Keep the SDK and project paths free of spaces, as required by the ESP-IDF build system.
+  - [uv](https://docs.astral.sh/uv/) with its managed Python 3.12: `uv python install 3.12`. ESP-IDF supports Python 3.9–3.13, and newer Homebrew Pythons break its setup, so `scripts/idf-env.sh` always runs ESP-IDF on that uv-managed interpreter and never on a system Python. Set `WATCHLING_IDF_PYTHON` to pick another supported version. ESP-IDF keeps one Python environment per version: create it with the same interpreter by running `install.sh esp32s3` (or `python3 "$IDF_PATH/tools/idf_tools.py" install-python-env`) in a shell that sourced the helper.
 
 No audio service API keys are needed for setup or everyday use.
 
-## Offline firmware installation
+## 1. Install firmware (Option A: Prebuilt release bundle)
 
-Private firmware releases are attached to authenticated GitHub releases. The draft is for the repository owner and writers/admins to review. After the owner publishes it, collaborators with repository read access can log in and download both the ZIP and its matching `.zip.sha256` file. Verify the archive before extracting it:
+If you have a prebuilt firmware release archive (`watchling-<version>-esp-vocat-v1.2.zip` and its matching `.zip.sha256` file from GitHub Releases or `./scripts/build-firmware-release.sh`), verify the archive before extracting it:
 
 ```sh
 shasum -a 256 -c watchling-v1.2.3-esp-vocat-v1.2.zip.sha256
@@ -22,7 +23,7 @@ unzip watchling-v1.2.3-esp-vocat-v1.2.zip
 cd watchling-v1.2.3-esp-vocat-v1.2
 ```
 
-The extracted installer is self-contained. It needs Node.js 22 or newer, but no network connection after the download. Start it with `node serve-installer.mjs`, run `sh start.command`, or double-click `start.command` in Finder. If macOS refuses to open the launcher, run `chmod +x start.command` first. The launcher serves only `http://127.0.0.1:8765`; open that address in desktop Chrome or Edge. The macOS launcher may open Chrome automatically.
+The extracted installer is self-contained. It needs Node.js 22 or newer, but no network connection or ESP-IDF installation. Start it with `node serve-installer.mjs`, run `sh start.command`, or double-click `start.command` in Finder. If macOS refuses to open the launcher, run `chmod +x start.command` first. The launcher serves only `http://127.0.0.1:8765`; open that address in desktop Chrome or Edge. The macOS launcher may open Chrome automatically.
 
 Before selecting the device, stop the bridge and any serial monitor from `pc-bridge/`:
 
@@ -30,9 +31,36 @@ Before selecting the device, stop the bridge and any serial monitor from `pc-bri
 npm run bridge:stop
 ```
 
-Use **Connect & install**, select the ESP-VoCat and confirm. Leave **Erase device** unchecked to preserve Settings and Bluetooth bonds. Erasing removes device data, including those settings and bonds. The installer flashes firmware only; the Mac bridge remains a separate installation. When finished, press Ctrl-C in the installer terminal and start a new agent session.
+Use **Connect & install**, select the ESP-VoCat and confirm. Leave **Erase device** unchecked to preserve Settings and Bluetooth bonds. Erasing removes device data, including those settings and bonds. The installer flashes firmware only; the Mac bridge remains a separate installation. When finished, press Ctrl-C in the installer terminal and proceed to [2. Build the bridge](#2-build-the-bridge).
 
-## 1. Build the bridge
+## 1b. Build and flash firmware from source (Option B: ESP-IDF)
+
+Skip this section if you already flashed a prebuilt release bundle in step 1.
+
+Set `IDF_PATH` if ESP-IDF is outside `~/esp/esp-idf`; otherwise the helper uses that directory. Run in a shell where your ESP-IDF installation is supported:
+
+```sh
+export IDF_PATH="$HOME/esp/esp-idf"  # replace if you installed the SDK elsewhere
+. scripts/idf-env.sh
+python -m pip install 'idf-component-manager==2.5.2'
+cd echoear-firmware
+idf.py build
+```
+
+Pinning `idf-component-manager==2.5.2` avoids an ESP-IDF 5.5 Kconfig dependency error (`MissingKconfigError: LV_USE_FREETYPE`) on clean builds. The checked-in defaults select ESP32-S3 and the ESP-VoCat memory/display configuration. The build resolves component dependencies and compiles the bundled firmware audio and images.
+
+To find your serial port (`*` marks Espressif devices), or after building the bridge in step 2, flash with the exact `/dev/cu.usbmodem…` port:
+
+```sh
+idf.py -p /dev/cu.usbmodem123456 flash
+```
+
+Replace the example port with your own. If no port appears, hold **BOOT** while connecting USB-C. Flashing replaces the installed firmware. Settings and BLE bonds use NVS; an ordinary flash is different from a full flash erase.
+
+For firmware logs, `idf.py -p /dev/cu.usbmodem123456 monitor` opens the serial monitor. Exit it with Ctrl-] before starting the bridge: both use the same port.
+Return to the repository root with `cd ..`.
+
+## 2. Build the bridge
 
 From the repository root:
 
@@ -44,33 +72,7 @@ npm run build
 npm run list-ports
 ```
 
-If you do not use nvm, activate Node 22 or newer with your preferred version manager and skip `nvm use`. Native dependencies may require Apple's command line developer tools. Port listing marks Espressif devices with `*`; note the exact `/dev/cu.usbmodem…` path for flashing. Then return to the root with `cd ..`.
-
-## 2. Build and flash firmware
-
-Set `IDF_PATH` if ESP-IDF is outside `~/esp/esp-idf`; otherwise the helper uses that directory. Run in a shell where your ESP-IDF installation is supported:
-
-```sh
-export IDF_PATH="$HOME/esp/esp-idf"  # replace if you installed the SDK elsewhere
-```
-
-```sh
-. scripts/idf-env.sh
-cd echoear-firmware
-idf.py build
-```
-
-The checked-in defaults select ESP32-S3 and the ESP-VoCat memory/display configuration. The build resolves component dependencies and compiles the bundled firmware audio and images.
-
-Flash with the exact port from step 1, for example:
-
-```sh
-idf.py -p /dev/cu.usbmodem123456 flash
-```
-
-Replace the example port with your own. If no port appears, hold **BOOT** while connecting USB-C. Flashing replaces the installed firmware. Settings and BLE bonds use NVS; an ordinary flash is different from a full flash erase.
-
-For firmware logs, `idf.py -p /dev/cu.usbmodem123456 monitor` opens the serial monitor. Exit it with Ctrl-] before starting the bridge: both use the same port.
+If you do not use nvm, activate Node 22 or newer with your preferred version manager and skip `nvm use`. Port listing marks Espressif devices with `*`. Then return to the root with `cd ..`.
 
 ## 3. Try a foreground connection
 

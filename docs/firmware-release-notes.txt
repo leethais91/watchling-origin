@@ -1,12 +1,12 @@
 Offline firmware installer for ESP-VoCat V1.2 (ESP32-S3, 16 MB flash / 16 MB octal PSRAM).
 
-1. Download the ZIP and its .sha256 file while logged in to GitHub with repository access.
+1. Download the ZIP and its .sha256 file from this release.
 2. Verify the archive checksum, then extract the ZIP.
 3. Install Node.js 22 or newer if needed. Run start.command, or run node serve-installer.mjs in the extracted folder.
 4. Open http://127.0.0.1:8765 in desktop Chrome or Edge. Stop Watchling's bridge and serial monitors before selecting the USB device.
 5. Click Connect & install, select the ESP-VoCat and confirm installation. Leave Erase device unchecked to preserve Settings and Bluetooth bonds; erasing removes all device data.
 6. After flashing, start a new agent session to restart the bridge. Press Ctrl-C in the installer terminal when finished.
 
-The bundle includes every flash part from the build at its original offset, manifest.json, release.json, per-file SHA-256 checksums and third-party notices. It needs no network connection after download. Never host or share this bundle publicly while firmware distribution remains private.
+The bundle includes every flash part from the build at its original offset, manifest.json, release.json, per-file SHA-256 checksums and third-party notices. It needs no network connection or ESP-IDF installation after download.
 
 This workflow builds and packages firmware; it does not prove touchscreen, audio, Bluetooth or USB behavior on hardware. Complete the repository's release checklist before publishing the draft. The Mac bridge remains a separate installation.

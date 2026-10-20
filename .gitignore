@@ -16,6 +16,8 @@ release-output/
 .env
 .env.*
 
+.claude/
+plans/
 # Dashboard simulator
 echoear-firmware/simulator/cmake-out/
 

@@ -1,6 +1,6 @@
 # Changelog
 
-Changes below are unreleased; no public release is implied.
+All notable changes to this project are documented in this file.
 
 ## Unreleased
 
@@ -12,6 +12,7 @@ Changes below are unreleased; no public release is implied.
 - Watchling brand assets, public setup/reference guides and contribution templates.
 - MIT License for the project's source code.
 - CI for bridge checks, firmware compilation and repository credential-pattern checks.
+- Local offline firmware release builder (`scripts/build-firmware-release.sh`) replacing cloud release CI.
 
 ### Changed
 

@@ -40,4 +40,4 @@ Touch drives permission buttons and the pull-down settings screen. Brightness, v
 
 Task and permission announcements use macOS `say`. Idle chatter loads bundled Gemini-generated English WAV clips plus optional ElevenLabs mood sounds. The bridge sends 16 kHz mono signed 16-bit PCM with optional face cues; the firmware plays it through the board's speaker. Normal operation does not call those audio-generation APIs.
 
-Read [configuration](configuration.md) for data boundaries, [development](development.md) for tooling, and [chatter](chatter.md) for the maintained behavior reference. Historical proposals under `docs/archive/` are not current requirements.
+Read [configuration](configuration.md) for data boundaries, [development](development.md) for tooling, and [chatter](chatter.md) for the maintained behavior reference.
