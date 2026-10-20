@@ -1,10 +1,11 @@
 ---
 phase: 2
-title: "Bluetooth toggle"
-status: pending
+title: Bluetooth toggle
+status: completed
 priority: P1
-dependencies: [1]
-effort: "1-1.5 d"
+dependencies:
+  - 1
+effort: 1-1.5 d
 ---
 
 # Phase 2: Bluetooth toggle

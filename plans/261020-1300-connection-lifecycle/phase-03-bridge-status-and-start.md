@@ -1,10 +1,11 @@
 ---
 phase: 3
-title: "Bridge status and start"
-status: pending
+title: Bridge status and start
+status: completed
 priority: P2
-dependencies: [2]
-effort: "0.5 d"
+dependencies:
+  - 2
+effort: 0.5 d
 ---
 
 # Phase 3: Bridge status and start

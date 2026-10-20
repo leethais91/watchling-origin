@@ -3,7 +3,7 @@ title: USB/BLE connection reliability and on/off lifecycle
 description: >-
   Fix USB/BLE link drops and lost approvals, make Bluetooth opt-in from device
   Settings, add bridge status/start, dim the device on battery when unlinked.
-status: pending
+status: completed
 priority: P2
 branch: main
 tags:
@@ -29,10 +29,10 @@ Fix link reliability first (zombie USB port, approvals dropped on brief link los
 | Phase | Name | Status |
 |-------|------|--------|
 | 1 | [Link reliability](./phase-01-link-reliability.md) | Completed |
-| 2 | [Bluetooth toggle](./phase-02-bluetooth-toggle.md) | Pending |
-| 3 | [Bridge status and start](./phase-03-bridge-status-and-start.md) | Pending |
-| 4 | [Battery power saving](./phase-04-battery-power-saving.md) | Pending |
-| 5 | [Docs and release notes](./phase-05-docs-and-release-notes.md) | Pending |
+| 2 | [Bluetooth toggle](./phase-02-bluetooth-toggle.md) | Completed |
+| 3 | [Bridge status and start](./phase-03-bridge-status-and-start.md) | Completed |
+| 4 | [Battery power saving](./phase-04-battery-power-saving.md) | Completed |
+| 5 | [Docs and release notes](./phase-05-docs-and-release-notes.md) | Completed |
 
 Order is strict: 1 → 2 → 3 (status reports the `ble` field from 2) → 4 → 5.
 
@@ -53,6 +53,12 @@ Order is strict: 1 → 2 → 3 (status reports the `ble` field from 2) → 4 →
 
 ## Dependencies
 No overlap with in-progress plans (`261018-1405-chatter-v3`, `261018-public-repository`, `261019-2221-firmware-web-release`).
+
+## Outcome (2026-10-20)
+All phases done and verified on device: USB/BLE switching both ways with an approval on screen, Bluetooth switch (off by default, persists across reboot), `bridge:status`/`bridge:start`, screen-off on battery (tested with a 1-min build).
+BLE root cause found on device: other Nordic UART devices nearby matched the scan and CoreBluetooth connects never time out; fixed by matching the Watchling name plus a 10 s connect timeout.
+
+Open (not done): face-down quiet mode wakes a dark screen; any IMU event wakes it (check desk vibration); 10-s grace path only unit-tested (switches had no gap).
 
 ## Unresolved questions
 - Why BLE never connected in the 2026-10-20 12:30 session (Phase 1 debug).

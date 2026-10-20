@@ -1,10 +1,14 @@
 ---
 phase: 5
-title: "Docs and release notes"
-status: pending
+title: Docs and release notes
+status: completed
 priority: P3
-dependencies: [1, 2, 3, 4]
-effort: "0.5 d"
+dependencies:
+  - 1
+  - 2
+  - 3
+  - 4
+effort: 0.5 d
 ---
 
 # Phase 5: Docs and release notes

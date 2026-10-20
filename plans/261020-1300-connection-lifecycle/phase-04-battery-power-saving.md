@@ -1,10 +1,11 @@
 ---
 phase: 4
-title: "Battery power saving"
-status: pending
+title: Battery power saving
+status: completed
 priority: P2
-dependencies: [2]
-effort: "1 d"
+dependencies:
+  - 2
+effort: 1 d
 ---
 
 # Phase 4: Battery power saving
