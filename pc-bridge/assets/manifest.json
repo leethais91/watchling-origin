@@ -118,6 +118,39 @@
     },
     "CARE_05": {
       "textHash": "3184036a592735a0"
+    },
+    "CARE_06": {
+      "textHash": "f835b8cb6cb34502"
+    },
+    "CARE_07": {
+      "textHash": "c8283a99f9ff75d9"
+    },
+    "CARE_08": {
+      "textHash": "1750d72fa78268cf"
+    },
+    "CTX_01": {
+      "textHash": "8023f476f24404c9"
+    },
+    "CTX_02": {
+      "textHash": "6ae9eaff9627500c"
+    },
+    "CTX_03": {
+      "textHash": "46cfb2d955fe7997"
+    },
+    "CTX_04": {
+      "textHash": "ee2cb4c17e18f06c"
+    },
+    "CTX_05": {
+      "textHash": "86e7773cff024e1b"
+    },
+    "CTX_06": {
+      "textHash": "e59681b1f2546cc9"
+    },
+    "CTX_07": {
+      "textHash": "09dff929dfb3945f"
+    },
+    "CTX_08": {
+      "textHash": "bf9fcbe78b216d7b"
     }
   }
 }

@@ -33,7 +33,7 @@ plays. Spec: `docs/archive/chatter-design-v3.md` (§0 overrides the rest). Decis
 | 1 | [SFX generation](./phase-01-sfx-generation.md) | Completed |
 | 2 | [Chatter runtime](./phase-02-chatter-runtime.md) | Completed |
 | 3 | [Mood on say (protocol + firmware)](./phase-03-mood-on-say-protocol-firmware.md) | Completed |
-| 4 | [Gemini voice clips](./phase-04-gemini-voice-clips.md) | In Progress |
+| 4 | [Gemini voice clips](./phase-04-gemini-voice-clips.md) | Completed |
 | 5 | [Docs](./phase-05-docs.md) | Pending |
 
 Order: 1 → 2 → 3 can run now (1 needs `ELEVENLABS_API_KEY`, set). 4 needs `GEMINI_API_KEY`
