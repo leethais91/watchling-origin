@@ -28,6 +28,10 @@ const NUS_TX = "6e400003b5a3f393e0a9e50e24dcca9e"; // device notifies
 /** Fits one ATT write at the default macOS MTU (185) without a long write. */
 const WRITE_CHUNK_BYTES = 180;
 const RECONNECT_INTERVAL_MS = 3000;
+/** Advertised name (firmware ble_link.c); other Nordic UART devices nearby share the service UUID. */
+const DEVICE_NAME = "Watchling";
+/** CoreBluetooth never gives up on a connect by itself; a device gone quiet would hold the loop forever. */
+const CONNECT_TIMEOUT_MS = 10000;
 /** How long to wait for the adapter before logging its state and trying again. */
 const POWER_ON_TIMEOUT_MS = 15000;
 
@@ -110,8 +114,11 @@ export class BleTransport extends EventEmitter<LinkEvents> implements DeviceLink
         this.emit("log", "BLE scanning for Watchling");
         await noble.startScanningAsync([NUS_SERVICE], false);
         for await (const peripheral of noble.discoverAsync()) {
-          found = peripheral;
-          break;
+          if (peripheral.advertisement.localName === DEVICE_NAME) {
+            found = peripheral;
+            break;
+          }
+          this.emit("log", `BLE ignoring ${peripheral.advertisement.localName ?? peripheral.id}: not ${DEVICE_NAME}`);
         }
         await noble.stopScanningAsync();
         if (found) {
@@ -130,10 +137,11 @@ export class BleTransport extends EventEmitter<LinkEvents> implements DeviceLink
 
   private async open(peripheral: Peripheral): Promise<void> {
     this.peripheral = peripheral;
-    await peripheral.connectAsync();
-    const { characteristics } = await peripheral.discoverSomeServicesAndCharacteristicsAsync(
-      [NUS_SERVICE],
-      [NUS_RX, NUS_TX],
+    await withTimeout(peripheral.connectAsync(), CONNECT_TIMEOUT_MS, "connect");
+    const { characteristics } = await withTimeout(
+      peripheral.discoverSomeServicesAndCharacteristicsAsync([NUS_SERVICE], [NUS_RX, NUS_TX]),
+      CONNECT_TIMEOUT_MS,
+      "service discovery",
     );
     const rx = characteristics.find((c) => c.uuid === NUS_RX);
     const tx = characteristics.find((c) => c.uuid === NUS_TX);
@@ -163,5 +171,18 @@ export class BleTransport extends EventEmitter<LinkEvents> implements DeviceLink
     this.rx = rx;
     this.emit("connected", `BLE ${peripheral.advertisement.localName ?? peripheral.id}`);
     this.send({ t: "ping" });
+  }
+}
+
+/** Rejects if `promise` has not settled in `ms`; the caller's error path cancels the connection. */
+async function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms / 1000} s`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
   }
 }
