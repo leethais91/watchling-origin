@@ -56,7 +56,7 @@ jobs:
         with:
           fetch-depth: 0
       - run: python3 scripts/check-secrets.py --history
-      - run: bash -n scripts/idf-env.sh
+      - run: bash -n scripts/idf-env.sh scripts/build-firmware-release.sh
       - run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 
   installer:

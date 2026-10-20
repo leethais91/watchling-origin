@@ -1,12 +1,15 @@
-"""Focused tests for the private firmware release packager."""
+"""Focused tests for the firmware release packager and local build script."""
 
 import hashlib
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+
+BUILD_SCRIPT = Path(__file__).parents[1] / "build-firmware-release.sh"
 
 
 SCRIPT = Path(__file__).parents[1] / "package-firmware-release.py"
@@ -181,6 +184,34 @@ class FirmwareReleaseTests(unittest.TestCase):
             self.assertFalse(any(name.endswith("unrelated-source.c") for name in names))
             self.assertFalse(any("node_modules" in name for name in names))
 
+
+    def test_local_build_script_cli_validation(self):
+        help_run = subprocess.run(
+            ["bash", str(BUILD_SCRIPT), "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, help_run.returncode)
+        self.assertIn("Usage:", help_run.stdout)
+
+        invalid_ver = subprocess.run(
+            ["bash", str(BUILD_SCRIPT), "1.2.3", "--allow-dirty"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(0, invalid_ver.returncode)
+        self.assertIn("Version must be a semantic tag", invalid_ver.stderr)
+
+        unknown_opt = subprocess.run(
+            ["bash", str(BUILD_SCRIPT), "--not-a-flag"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(0, unknown_opt.returncode)
+        self.assertIn("Unknown option", unknown_opt.stderr)
 
 if __name__ == "__main__":
     unittest.main()
