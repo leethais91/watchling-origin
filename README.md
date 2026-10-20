@@ -19,7 +19,21 @@ A tiny desk companion for **Claude Code and Codex CLI**, built for the **ESP-VoC
 | --- | --- |
 | ![Watchling dashboard simulator capture](docs/images/dashboard.png) | ![Watchling settings simulator capture](docs/images/settings.png) |
 
-*Host simulator captures of the firmware UI; not device photographs.*
+The fullscreen face changes expression with agent activity:
+
+| Idle | Busy | Sleep |
+| --- | --- | --- |
+| ![Idle face with relaxed eyes](docs/images/face-idle.png) | ![Busy face while an agent is working](docs/images/face-busy.png) | ![Sleeping face with closed eyes and floating Zs](docs/images/face-sleep.png) |
+| **Happy — task complete** | **Attention — waiting for you** | **Error** |
+| ![Happy face after a task completes](docs/images/face-happy.png) | ![Attention face while waiting for user input](docs/images/face-attention.png) | ![Error face](docs/images/face-error.png) |
+
+It also reacts to touch and motion:
+
+| Surprised — poked or picked up | Lean — tilted | Dizzy — shaken | Stargaze — on its back |
+| --- | --- | --- | --- |
+| ![Surprised face with wide eyes](docs/images/face-surprised.png) | ![Leaning face looking sideways](docs/images/face-lean.png) | ![Dizzy face with circling eyes](docs/images/face-dizzy.png) | ![Stargazing face looking up with twinkling stars](docs/images/face-stargaze.png) |
+
+*All screenshots are host simulator captures of the firmware UI, not device photographs. Expressions are animated on the device; these images show individual frames.*
 
 ## Supported setup
 
