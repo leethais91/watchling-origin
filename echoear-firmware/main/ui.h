@@ -35,6 +35,7 @@ typedef void (*ui_decision_cb_t)(uint32_t id, bool approve);
 typedef struct {
     bool usb;
     bool ble;
+    bool usb_power; /* a USB host powers the board (cable in), whether or not the bridge runs */
 } ui_link_state_t;
 /* Polled once per second; no live link hides any open modal. */
 typedef ui_link_state_t (*ui_link_probe_t)(void);
@@ -50,7 +51,7 @@ void ui_set_usage(const ui_usage_t *usage);
 /* The system clock now holds UTC; show it shifted by the host's offset (minutes east of UTC). */
 void ui_set_clock_offset(int utc_offset_min);
 /* Battery state from the fuel gauge; percent < 0 hides the indicator. */
-void ui_set_battery(int percent, bool charging);
+void ui_set_battery(int percent, bool charging, bool discharging);
 /* Shows the event in the status line and on the robot's face; also ends that agent's busy state. */
 void ui_show_event(const char *source, ui_event_kind_t kind, const char *text);
 /* An agent ("claude" / "codex") started or stopped working; the robot scans while any is busy. */
@@ -89,6 +90,14 @@ void ui_set_quiet(bool quiet);
  */
 typedef void (*ui_needs_user_cb_t)(bool needs_user);
 void ui_set_needs_user_cb(ui_needs_user_cb_t cb);
+
+/*
+ * Called in the LVGL task when the screen should go dark (on battery, no USB power and no
+ * bridge for SCREEN_OFF_IDLE_MS without a touch or motion) or light up again. While dark,
+ * the first touch only wakes it. Without a callback the screen never goes dark.
+ */
+typedef void (*ui_screen_off_cb_t)(bool off);
+void ui_set_screen_off_cb(ui_screen_off_cb_t cb);
 
 /*
  * Called in the LVGL task a few times a second: the gravity vector in mg, `lateral_mg` toward

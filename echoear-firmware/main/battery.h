@@ -9,7 +9,8 @@
 
 typedef struct {
     int percent;   /* state of charge, 0..100 */
-    bool charging; /* current flowing into the battery */
+    bool charging;    /* current flowing into the battery */
+    bool discharging; /* the board runs on the battery (a full battery on a charger is neither) */
 } battery_state_t;
 
 /* Probes the gauge; ESP_ERR_NOT_FOUND when it does not answer. Call after bsp_display_start(). */

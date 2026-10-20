@@ -40,7 +40,11 @@ static volatile bool s_authenticated;
 static volatile bool s_subscribed;
 /* The Bluetooth switch in Settings; written by the UI task, applied on the host task. */
 static volatile bool s_enabled;
-static struct ble_npl_event s_enabled_ev;
+/* Slow advertising while the screen is off on battery; written by the UI task. */
+static volatile bool s_low_power;
+static struct ble_npl_event s_advertising_ev;
+/* The setters may run when Bluetooth failed to start; the event exists only after start. */
+static bool s_started;
 
 static void advertise(void);
 
@@ -204,6 +208,9 @@ static void advertise(void)
     struct ble_gap_adv_params params = {
         .conn_mode = BLE_GAP_CONN_MODE_UND,
         .disc_mode = BLE_GAP_DISC_MODE_GEN,
+        /* 0 = the stack's fast default; slow costs a few seconds on reconnect. */
+        .itvl_min = s_low_power ? BLE_GAP_ADV_ITVL_MS(1000) : 0,
+        .itvl_max = s_low_power ? BLE_GAP_ADV_ITVL_MS(1280) : 0,
     };
     rc = ble_gap_adv_start(s_own_addr_type, NULL, BLE_HS_FOREVER, &params, gap_event, NULL);
     if (rc != 0 && rc != BLE_HS_EALREADY) {
@@ -211,18 +218,20 @@ static void advertise(void)
     }
 }
 
-/* Host task: applies the Bluetooth switch (see ble_link_set_enabled). */
-static void enabled_changed(struct ble_npl_event *ev)
+/* Host task: applies the Bluetooth switch and the advertising speed. */
+static void advertising_changed(struct ble_npl_event *ev)
 {
-    /* Before the host syncs there is nothing to start or stop; on_sync reads s_enabled. */
+    /* Before the host syncs there is nothing to start or stop; on_sync reads both flags. */
     if (!ble_hs_synced()) {
         return;
     }
+    int rc = ble_gap_adv_stop();
     if (s_enabled) {
-        advertise();
+        if (s_conn == BLE_HS_CONN_HANDLE_NONE) {
+            advertise(); /* (re)started with the current interval */
+        }
         return;
     }
-    int rc = ble_gap_adv_stop();
     if (rc != 0 && rc != BLE_HS_EALREADY) {
         ESP_LOGW(TAG, "Advertising did not stop (%d)", rc);
     }
@@ -266,7 +275,8 @@ esp_err_t ble_link_start(ble_link_rx_cb_t on_rx, ble_link_pairing_cb_t on_pairin
     if (err != ESP_OK) {
         return err;
     }
-    ble_npl_event_init(&s_enabled_ev, enabled_changed, NULL);
+    ble_npl_event_init(&s_advertising_ev, advertising_changed, NULL);
+    s_started = true;
 
     ble_hs_cfg.sync_cb = on_sync;
     ble_hs_cfg.reset_cb = on_reset;
@@ -298,8 +308,23 @@ void ble_link_set_enabled(bool enabled)
     }
     s_enabled = enabled;
     ESP_LOGI(TAG, "Bluetooth %s", enabled ? "on" : "off");
+    if (!s_started) {
+        return;
+    }
     /* Applied on the host task, in order with the GAP events that may advertise or connect. */
-    ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_enabled_ev);
+    ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_advertising_ev);
+}
+
+void ble_link_set_low_power(bool low_power)
+{
+    if (low_power == s_low_power) {
+        return;
+    }
+    s_low_power = low_power;
+    if (!s_started) {
+        return;
+    }
+    ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_advertising_ev);
 }
 
 bool ble_link_ready(void)

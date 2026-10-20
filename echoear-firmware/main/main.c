@@ -16,6 +16,7 @@
 #include "esp_timer.h"
 #include "nvs_flash.h"
 #include "bsp/esp-bsp.h"
+#include "driver/usb_serial_jtag.h"
 
 #include "audio.h"
 #include "battery.h"
@@ -46,9 +47,9 @@ static void battery_poll(void *arg)
 {
     battery_state_t state;
     if (battery_read(&state) == ESP_OK) {
-        ui_set_battery(state.percent, state.charging);
+        ui_set_battery(state.percent, state.charging, state.discharging);
     } else {
-        ui_set_battery(-1, false);
+        ui_set_battery(-1, false, false);
     }
 }
 
@@ -73,7 +74,11 @@ static void battery_start(void)
 
 static ui_link_state_t link_state(void)
 {
-    return (ui_link_state_t){.usb = host_link_alive(HOST_LINK_USB), .ble = host_link_alive(HOST_LINK_BLE)};
+    return (ui_link_state_t){
+        .usb = host_link_alive(HOST_LINK_USB),
+        .ble = host_link_alive(HOST_LINK_BLE),
+        .usb_power = usb_serial_jtag_is_connected(),
+    };
 }
 
 /* Bonds and settings live in NVS; a full or older-format partition is wiped. */
@@ -200,6 +205,14 @@ static void on_settings(settings_field_t field, const settings_values_t *values,
     if (final) {
         settings_store_save(values);
     }
+}
+
+/* LVGL task. Battery saver: the backlight is the big draw; advertising slows down too. */
+static void on_screen_off(bool off)
+{
+    ESP_LOGI(TAG, "Screen %s", off ? "off (on battery, no bridge)" : "on");
+    bsp_display_brightness_set(off ? 0 : s_settings.brightness);
+    ble_link_set_low_power(off);
 }
 
 static void on_decision(uint32_t id, bool approve)
@@ -383,6 +396,7 @@ void app_main(void)
     }
     bsp_display_brightness_set(s_settings.brightness);
     ui_init(on_decision, link_state, &s_settings, on_settings);
+    ui_set_screen_off_cb(on_screen_off);
     battery_start();
 
     audio_set_volume(s_settings.volume);

@@ -55,6 +55,10 @@
  */
 #define FACE_IDLE_MS      (30 * 1000)
 #define DOZE_IDLE_MS      (5 * 60 * 1000)
+/* On battery with no USB power and no bridge, the backlight goes off after this long. */
+#ifndef SCREEN_OFF_IDLE_MS
+#define SCREEN_OFF_IDLE_MS (10 * 60 * 1000)
+#endif
 #define SURPRISED_MS      1200
 /* A lean lasts until the body is level again; this only covers a missed LEVEL event. */
 #define TILT_LEAN_MAX_MS  (20 * 1000)
@@ -83,6 +87,14 @@ static bool s_bridge_linked;
 
 /* lv_tick of the latest agent event, request or touch. */
 static uint32_t s_last_activity;
+/* lv_tick of the latest status poll that saw a link or USB power. */
+static uint32_t s_last_powered;
+static ui_screen_off_cb_t s_on_screen_off;
+static bool s_screen_off;
+/* From the fuel gauge: current flows out of the battery (false when unknown). */
+static bool s_battery_discharging;
+/* Covers everything while the screen is dark, so the waking touch presses nothing. */
+static lv_obj_t *s_wake_layer;
 static bool s_face_mode;
 
 /* Rocking detection: direction (-1 left, 1 right) and lv_tick of the latest tilt. */
@@ -205,6 +217,59 @@ static void touch_catcher_create(void)
     for (size_t i = 0; i < sizeof(codes) / sizeof(codes[0]); i++) {
         lv_obj_add_event_cb(catcher, touch_cb, codes[i], NULL);
     }
+}
+
+/* ---------- screen off on battery ---------- */
+
+static void screen_off_set(bool off)
+{
+    if (off == s_screen_off || s_on_screen_off == NULL) {
+        return;
+    }
+    s_screen_off = off;
+    lv_obj_set_hidden(s_wake_layer, !off);
+    s_on_screen_off(off);
+    /* Nobody sees the face animate in the dark: stop redrawing and flushing it over SPI. */
+    lv_display_t *display = lv_display_get_default();
+    lv_display_enable_invalidation(display, !off);
+    if (!off) {
+        lv_obj_invalidate(lv_screen_active());
+        lv_obj_invalidate(lv_layer_top());
+    }
+}
+
+static void wake_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    activity_note();
+    screen_off_set(false);
+}
+
+static void wake_layer_create(void)
+{
+    s_wake_layer = lv_obj_create(lv_layer_sys());
+    lv_obj_remove_style_all(s_wake_layer);
+    lv_obj_set_size(s_wake_layer, BSP_LCD_H_RES, BSP_LCD_V_RES);
+    lv_obj_center(s_wake_layer);
+    lv_obj_add_event_cb(s_wake_layer, wake_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_set_hidden(s_wake_layer, true);
+}
+
+/*
+ * Dark only while the board runs on its battery (a charger or power bank without a USB host
+ * reads as not discharging once full), with no USB host, no link, nothing on screen that
+ * waits for the user, and no touch, motion or link for SCREEN_OFF_IDLE_MS.
+ */
+static void screen_power_update(ui_link_state_t link)
+{
+    bool linked = link.usb || link.ble;
+    if (linked || link.usb_power) {
+        s_last_powered = lv_tick_get();
+    }
+    bool on_battery = s_battery_discharging && !link.usb_power;
+    bool idle = lv_tick_elaps(s_last_activity) >= SCREEN_OFF_IDLE_MS &&
+                lv_tick_elaps(s_last_powered) >= SCREEN_OFF_IDLE_MS;
+    screen_off_set(on_battery && !linked && idle && !s_modal_visible && lv_obj_is_hidden(s_pairing));
 }
 
 /* ---------- confirm modal ---------- */
@@ -435,6 +500,7 @@ static void status_timer_cb(lv_timer_t *timer)
     agent_dashboard_update(&s_dash);
     robot_base_update();
     needs_user_update();
+    screen_power_update(link);
     if (!linked && s_modal_visible) {
         modal_hide(); /* the bridge releases the request to the terminal on its side */
     }
@@ -468,11 +534,13 @@ void ui_init(ui_decision_cb_t on_decision, ui_link_probe_t link_probe, const set
     };
     agent_dashboard_update(&s_dash);
     s_last_activity = lv_tick_get();
+    s_last_powered = s_last_activity;
     robot_base_update();
     touch_catcher_create();
     settings_screen_create(lv_layer_top(), settings, on_settings, activity_note);
     modal_create();
     pairing_create();
+    wake_layer_create();
     lv_timer_create(status_timer_cb, STATUS_POLL_MS, NULL);
     bsp_display_unlock();
 }
@@ -499,9 +567,10 @@ void ui_set_clock_offset(int utc_offset_min)
     bsp_display_unlock();
 }
 
-void ui_set_battery(int percent, bool charging)
+void ui_set_battery(int percent, bool charging, bool discharging)
 {
     bsp_display_lock(0);
+    s_battery_discharging = discharging;
     s_dash.battery_percent = percent;
     s_dash.battery_charging = charging;
     agent_dashboard_update(&s_dash);
@@ -740,5 +809,12 @@ void ui_set_needs_user_cb(ui_needs_user_cb_t cb)
 {
     bsp_display_lock(0);
     s_on_needs_user = cb;
+    bsp_display_unlock();
+}
+
+void ui_set_screen_off_cb(ui_screen_off_cb_t cb)
+{
+    bsp_display_lock(0);
+    s_on_screen_off = cb;
     bsp_display_unlock();
 }

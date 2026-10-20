@@ -106,7 +106,7 @@ static void sim_settings_closed(void)
 
 static ui_link_state_t sim_link_probe(void)
 {
-    return (ui_link_state_t){.usb = true, .ble = true};
+    return (ui_link_state_t){.usb = true, .ble = true, .usb_power = true};
 }
 
 static int write_ppm(const char *path)

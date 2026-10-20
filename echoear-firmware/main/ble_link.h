@@ -26,6 +26,9 @@ esp_err_t ble_link_start(ble_link_rx_cb_t on_rx, ble_link_pairing_cb_t on_pairin
  */
 void ble_link_set_enabled(bool enabled);
 
+/* Advertises about once a second instead of the stack's fast default, to save battery. */
+void ble_link_set_low_power(bool low_power);
+
 /* True while an authenticated host is connected and subscribed to notifications. */
 bool ble_link_ready(void);
 

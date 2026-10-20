@@ -8,6 +8,8 @@ static const char *TAG = "battery";
 
 #define BQ27220_ADDR        0x55
 #define BQ27220_CMD_CURRENT 0x0C /* mA, signed; positive while charging */
+/* The board draws well over this from the battery; a full battery on a charger reads about 0. */
+#define DISCHARGE_MIN_MA    20
 #define BQ27220_CMD_SOC     0x2C /* state of charge, % */
 #define I2C_TIMEOUT_MS      50
 #define I2C_SPEED_HZ        100000
@@ -47,5 +49,6 @@ esp_err_t battery_read(battery_state_t *out)
     ESP_RETURN_ON_ERROR(read_word(BQ27220_CMD_CURRENT, &current), TAG, "no current");
     out->percent = soc > 100 ? 100 : soc;
     out->charging = (int16_t)current > 0;
+    out->discharging = (int16_t)current < -DISCHARGE_MIN_MA;
     return ESP_OK;
 }
