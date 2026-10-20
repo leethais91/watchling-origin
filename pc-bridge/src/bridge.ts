@@ -47,6 +47,8 @@ await usage.restore();
 const tts = createTtsEngine();
 /** Voice switch on the device's settings screen; synthesis is skipped while it is off. */
 let deviceVoice = true;
+/** Bluetooth switch on the device's settings screen; null until firmware reports it. */
+let deviceBle: boolean | null = null;
 /** Speech clips are raw PCM: USB only. Over BLE the device still chimes. */
 const speechLink = {
   get alive() {
@@ -119,14 +121,22 @@ transport.on("message", (msg) => {
   switch (msg.t) {
     case "hello":
       deviceVoice = msg.voice ?? true;
-      log(`device ready (fw ${msg.fw})${deviceVoice ? "" : " (voice off)"}`);
+      deviceBle = msg.ble ?? null;
+      log(`device ready (fw ${msg.fw})${deviceVoice ? "" : " (voice off)"}${deviceBle === false ? " (bluetooth off)" : ""}`);
       transport.send(clockMessage());
       transport.send(usage.snapshot());
       broker.resendActive();
       break;
     case "settings":
-      deviceVoice = msg.voice;
-      log(`device voice ${deviceVoice ? "on" : "off"}`);
+      // One message carries every switch; log only the ones that changed.
+      if (msg.voice !== deviceVoice) {
+        deviceVoice = msg.voice;
+        log(`device voice ${deviceVoice ? "on" : "off"}`);
+      }
+      if (msg.ble !== undefined && msg.ble !== deviceBle) {
+        deviceBle = msg.ble;
+        log(`device bluetooth ${deviceBle ? "on" : "off"}`);
+      }
       break;
     case "confirm_res": {
       const accepted = broker.onDeviceDecision(msg.id, msg.action, msg.src);

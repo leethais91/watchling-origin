@@ -1,6 +1,6 @@
 /*
- * Settings screen for the round panel: brightness arc (left), volume arc (right) and a
- * Voice (TTS) switch. It opens only by pulling down from the top edge past a threshold, so
+ * Settings screen for the round panel: brightness arc (left), volume arc (right), and
+ * Voice (TTS) and Bluetooth switches. It opens only by pulling down from the top edge past a threshold, so
  * stray swipes on the dashboard never land here; it closes on a swipe up, a tap on the hint,
  * or after a quiet spell.
  *
@@ -21,12 +21,14 @@ typedef struct {
     int brightness; /* SETTINGS_BRIGHTNESS_MIN..100 % */
     int volume;     /* 0..100 % */
     bool voice;     /* spoken announcements and chatter (chimes always play) */
+    bool ble;       /* advertise and accept a bonded host over Bluetooth LE */
 } settings_values_t;
 
 typedef enum {
     SETTINGS_FIELD_BRIGHTNESS,
     SETTINGS_FIELD_VOLUME,
     SETTINGS_FIELD_VOICE,
+    SETTINGS_FIELD_BLE,
 } settings_field_t;
 
 /*

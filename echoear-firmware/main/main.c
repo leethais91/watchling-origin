@@ -93,17 +93,19 @@ static bool voice_wanted(void)
     return s_settings.voice && !s_quiet;
 }
 
-static void send_voice(void)
+static void send_settings(void)
 {
-    host_link_send_json(voice_wanted() ? "{\"t\":\"settings\",\"voice\":true}"
-                                       : "{\"t\":\"settings\",\"voice\":false}");
+    char json[64];
+    snprintf(json, sizeof(json), "{\"t\":\"settings\",\"voice\":%s,\"ble\":%s}", voice_wanted() ? "true" : "false",
+             s_settings.ble ? "true" : "false");
+    host_link_send_json(json);
 }
 
 static void send_hello(void)
 {
-    char json[128];
-    snprintf(json, sizeof(json), "{\"t\":\"hello\",\"fw\":\"%s\",\"voice\":%s}",
-             esp_app_get_description()->version, voice_wanted() ? "true" : "false");
+    char json[160];
+    snprintf(json, sizeof(json), "{\"t\":\"hello\",\"fw\":\"%s\",\"voice\":%s,\"ble\":%s}",
+             esp_app_get_description()->version, voice_wanted() ? "true" : "false", s_settings.ble ? "true" : "false");
     host_link_send_json(json);
 }
 
@@ -115,7 +117,7 @@ static void quiet_set(bool quiet)
     }
     s_quiet = quiet;
     audio_set_muted(quiet);
-    send_voice();
+    send_settings();
     ui_set_quiet(quiet);
     ESP_LOGI(TAG, "Quiet mode %s", quiet ? "on" : "off");
 }
@@ -187,7 +189,12 @@ static void on_settings(settings_field_t field, const settings_values_t *values,
         break;
     case SETTINGS_FIELD_VOICE:
         audio_set_speech_enabled(values->voice);
-        send_voice();
+        send_settings();
+        break;
+    case SETTINGS_FIELD_BLE:
+        /* Report first: a bridge on BLE only must hear "off" before the link drops. */
+        send_settings();
+        ble_link_set_enabled(values->ble);
         break;
     }
     if (final) {
@@ -389,7 +396,7 @@ void app_main(void)
     body_sensors_start();
 
     ESP_ERROR_CHECK(host_link_start(on_host_message, on_host_audio));
-    if (nvs_err != ESP_OK || ble_link_start(host_link_ble_rx, ui_show_pairing) != ESP_OK) {
+    if (nvs_err != ESP_OK || ble_link_start(host_link_ble_rx, ui_show_pairing, s_settings.ble) != ESP_OK) {
         ESP_LOGE(TAG, "Bluetooth unavailable; USB only");
     }
     ESP_LOGI(TAG, "Free internal RAM: %u KB (largest block %u KB)",

@@ -38,7 +38,7 @@ Field `t` is the message type. Percentages are integers 0–100 or `null` when u
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `hello` | – | Port opened; device replies `hello` |
+| `hello` | – | Sent by the hub when it picks a link; device replies `hello` |
 | `ping` | – | Every 2 s; device replies `pong`. Device shows "no bridge" after 5 s silence |
 | `usage` | `claude:{h5,d7,costToday}`, `codex:{h5,d7}` | 5-hour / 7-day window usage; `costToday` USD (estimated, list price) |
 | `time` | `epoch`, `tz` | Unix seconds (UTC) and host offset in minutes east of UTC (Asia/Saigon = `420`). Sent after `hello` and every 10 min; the device sets its clock and keeps ticking between syncs |
@@ -53,8 +53,8 @@ Field `t` is the message type. Percentages are integers 0–100 or `null` when u
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `hello` | `fw`, `voice` | Firmware version (git describe); `voice` = spoken announcements on (missing from older firmware: treat as on) |
-| `settings` | `voice` | User flipped Voice (TTS) on the settings screen. While off, the bridge sends no `say` and the device drops any clip it gets; chimes still play |
+| `hello` | `fw`, `voice`, `ble` | Firmware version (git describe); `voice` = spoken announcements on (missing from older firmware: treat as on); `ble` = Bluetooth switch on (missing from older firmware: unknown) |
+| `settings` | `voice`, `ble` | User flipped Voice (TTS) or Bluetooth on the settings screen. While Voice is off, the bridge sends no `say` and the device drops any clip it gets; chimes still play. While Bluetooth is off, the device neither advertises nor keeps a BLE connection |
 | `pong` | – | Liveness |
 | `confirm_res` | `id`, `action: approve\|deny`, `src: touch\|voice\|tap` | User decision |
 

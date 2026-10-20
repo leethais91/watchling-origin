@@ -91,12 +91,12 @@ static void sim_decision(uint32_t id, bool approve)
     printf("decision #%u: %s\n", (unsigned)id, approve ? "approve" : "deny");
 }
 
-static const settings_values_t SIM_SETTINGS = {.brightness = 70, .volume = 60, .voice = true};
+static const settings_values_t SIM_SETTINGS = {.brightness = 70, .volume = 60, .voice = true, .ble = false};
 
 static void sim_settings(settings_field_t field, const settings_values_t *values, bool final)
 {
-    printf("settings: brightness %d%%, volume %d%%, voice %s%s\n", values->brightness, values->volume,
-           values->voice ? "on" : "off", final ? "" : " (dragging)");
+    printf("settings: brightness %d%%, volume %d%%, voice %s, bluetooth %s%s\n", values->brightness, values->volume,
+           values->voice ? "on" : "off", values->ble ? "on" : "off", final ? "" : " (dragging)");
 }
 
 static void sim_settings_closed(void)

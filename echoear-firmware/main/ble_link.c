@@ -38,6 +38,9 @@ static uint16_t s_tx_handle;
 static volatile uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
 static volatile bool s_authenticated;
 static volatile bool s_subscribed;
+/* The Bluetooth switch in Settings; written by the UI task, applied on the host task. */
+static volatile bool s_enabled;
+static struct ble_npl_event s_enabled_ev;
 
 static void advertise(void);
 
@@ -100,6 +103,11 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_CONNECT:
         if (event->connect.status != 0) {
             advertise();
+            return 0;
+        }
+        if (!s_enabled) {
+            /* Switched off while this connection was being set up. */
+            ble_gap_terminate(event->connect.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
             return 0;
         }
         s_conn = event->connect.conn_handle;
@@ -167,6 +175,9 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 
 static void advertise(void)
 {
+    if (!s_enabled) {
+        return;
+    }
     /* Flags + the 128-bit service UUID already take 21 of the 31 advertising bytes, so the
      * name goes in the scan response; hosts scanning actively still show it. */
     struct ble_hs_adv_fields fields = {
@@ -200,6 +211,30 @@ static void advertise(void)
     }
 }
 
+/* Host task: applies the Bluetooth switch (see ble_link_set_enabled). */
+static void enabled_changed(struct ble_npl_event *ev)
+{
+    /* Before the host syncs there is nothing to start or stop; on_sync reads s_enabled. */
+    if (!ble_hs_synced()) {
+        return;
+    }
+    if (s_enabled) {
+        advertise();
+        return;
+    }
+    int rc = ble_gap_adv_stop();
+    if (rc != 0 && rc != BLE_HS_EALREADY) {
+        ESP_LOGW(TAG, "Advertising did not stop (%d)", rc);
+    }
+    if (s_conn != BLE_HS_CONN_HANDLE_NONE) {
+        /* The disconnect event resets the link state; advertise() then stays quiet. */
+        rc = ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+        if (rc != 0 && rc != BLE_HS_ENOTCONN) {
+            ESP_LOGW(TAG, "Disconnect failed (%d)", rc);
+        }
+    }
+}
+
 static void on_sync(void)
 {
     ble_hs_util_ensure_addr(0);
@@ -221,15 +256,17 @@ static void host_task(void *param)
 
 /* ---------- public API ---------- */
 
-esp_err_t ble_link_start(ble_link_rx_cb_t on_rx, ble_link_pairing_cb_t on_pairing)
+esp_err_t ble_link_start(ble_link_rx_cb_t on_rx, ble_link_pairing_cb_t on_pairing, bool enabled)
 {
     s_on_rx = on_rx;
     s_on_pairing = on_pairing;
+    s_enabled = enabled;
 
     esp_err_t err = nimble_port_init();
     if (err != ESP_OK) {
         return err;
     }
+    ble_npl_event_init(&s_enabled_ev, enabled_changed, NULL);
 
     ble_hs_cfg.sync_cb = on_sync;
     ble_hs_cfg.reset_cb = on_reset;
@@ -252,6 +289,17 @@ esp_err_t ble_link_start(ble_link_rx_cb_t on_rx, ble_link_pairing_cb_t on_pairin
 
     nimble_port_freertos_init(host_task);
     return ESP_OK;
+}
+
+void ble_link_set_enabled(bool enabled)
+{
+    if (enabled == s_enabled) {
+        return;
+    }
+    s_enabled = enabled;
+    ESP_LOGI(TAG, "Bluetooth %s", enabled ? "on" : "off");
+    /* Applied on the host task, in order with the GAP events that may advertise or connect. */
+    ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_enabled_ev);
 }
 
 bool ble_link_ready(void)

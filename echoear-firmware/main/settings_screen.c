@@ -53,10 +53,13 @@
 #define SIDE_VALUE_Y         18
 #define GEAR_Y               -128
 #define TITLE_Y              -100
-#define VOICE_LABEL_Y        -30
-#define SWITCH_Y             18
-#define SWITCH_W             92
-#define SWITCH_H             44
+/* Voice and Bluetooth stack in the middle column: a label, then its switch. */
+#define VOICE_LABEL_Y        -60
+#define VOICE_SWITCH_Y       -26
+#define BLE_LABEL_Y          16
+#define BLE_SWITCH_Y         50
+#define SWITCH_W             76
+#define SWITCH_H             36
 #define HINT_ICON_Y          104
 #define HINT_Y               126
 #define SUN_RAY_COUNT        8
@@ -288,27 +291,33 @@ static void sun_icon_create(lv_obj_t *parent, int32_t x, int32_t y)
     }
 }
 
-static void voice_switch_cb(lv_event_t *e)
+static void switch_cb(lv_event_t *e)
 {
-    s_values.voice = lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
-    s_on_change(SETTINGS_FIELD_VOICE, &s_values, true);
+    settings_field_t field = (settings_field_t)(intptr_t)lv_event_get_user_data(e);
+    bool on = lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
+    if (field == SETTINGS_FIELD_VOICE) {
+        s_values.voice = on;
+    } else {
+        s_values.ble = on;
+    }
+    s_on_change(field, &s_values, true);
 }
 
-static void voice_switch_create(lv_obj_t *parent)
+static void switch_create(lv_obj_t *parent, int32_t y, bool on, settings_field_t field)
 {
     lv_obj_t *sw = lv_switch_create(parent);
     lv_obj_set_size(sw, SWITCH_W, SWITCH_H);
-    lv_obj_align(sw, LV_ALIGN_CENTER, 0, SWITCH_Y);
+    lv_obj_align(sw, LV_ALIGN_CENTER, 0, y);
     lv_obj_set_gesture_bubble(sw, false);
     lv_obj_set_style_bg_color(sw, lv_color_hex(COLOR_SWITCH_OFF), LV_PART_MAIN);
     lv_obj_set_style_bg_color(sw, lv_color_hex(COLOR_ELECTRIC_BLUE), LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_set_style_bg_color(sw, lv_color_hex(COLOR_TEXT_PRIMARY), LV_PART_KNOB);
     lv_obj_set_style_shadow_width(sw, 14, LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_set_style_shadow_color(sw, lv_color_hex(COLOR_ELECTRIC_BLUE), LV_PART_INDICATOR | LV_STATE_CHECKED);
-    if (s_values.voice) {
+    if (on) {
         lv_obj_add_state(sw, LV_STATE_CHECKED);
     }
-    lv_obj_add_event_cb(sw, voice_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(sw, switch_cb, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)field);
 }
 
 static void close_cb(lv_event_t *e)
@@ -356,7 +365,9 @@ static void screen_create(lv_obj_t *parent)
     value_text_set(s_volume_value, s_values.volume);
 
     label_create(s_screen, &lv_font_montserrat_16, COLOR_TEXT_PRIMARY, 0, VOICE_LABEL_Y, "Voice (TTS)");
-    voice_switch_create(s_screen);
+    switch_create(s_screen, VOICE_SWITCH_Y, s_values.voice, SETTINGS_FIELD_VOICE);
+    label_create(s_screen, &lv_font_montserrat_16, COLOR_TEXT_PRIMARY, 0, BLE_LABEL_Y, LV_SYMBOL_BLUETOOTH " Bluetooth");
+    switch_create(s_screen, BLE_SWITCH_Y, s_values.ble, SETTINGS_FIELD_BLE);
 
     /* The hint also closes on a tap, for anyone who does not try the swipe. */
     lv_obj_t *hint_icon = label_create(s_screen, &lv_font_montserrat_16, COLOR_TEXT_SECONDARY, 0, HINT_ICON_Y,
