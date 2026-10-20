@@ -17,7 +17,7 @@
     "list-ports": "tsx src/list-ports.ts",
     "bridge:start": "node dist/start-bridge.js",
     "bridge:status": "node dist/bridge-status.js",
-    "bridge:stop":"node dist/stop-bridge.js",
+    "bridge:stop": "node dist/stop-bridge.js",
     "hooks:install": "node dist/install-hooks.js install",
     "hooks:uninstall": "node dist/install-hooks.js uninstall",
     "hooks:install:codex": "node dist/install-hooks.js install --codex",

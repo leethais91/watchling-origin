@@ -15,7 +15,7 @@ if (!(await isBridgeRunning())) {
 
 const status = await postToBridge<BridgeStatus>("/status", {}, STATUS_TIMEOUT_MS);
 if (!status) {
-  console.error("bridge did not answer; check ~/.watchling/bridge.log");
+  console.error("bridge did not answer; restart it if it predates this version (bridge:stop, then bridge:start), else check ~/.watchling/bridge.log");
   process.exit(1);
 }
 console.log(formatBridgeStatus(status));
