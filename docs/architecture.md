@@ -22,11 +22,11 @@ Codex CLI local session JSONL ─── file watcher ┤
 
 Claude provides usage and estimated cost through its terminal statusline. Codex's local rollout watcher tracks usage, activity and completed tasks. Unknown measurements remain nullable; cached usage survives restarts. The clock is sent on device handshake and every ten minutes.
 
-The transport hub selects one responsive link, preferring USB. Both links use the same COBS/CRC framed JSON protocol. Switching links triggers a handshake and state resync. Audio PCM uses USB only. See [device protocol](device-protocol.md) for the wire contract.
+The transport hub selects one responsive link, preferring USB. Both links use the same COBS/CRC framed JSON protocol. Switching links triggers one handshake and state resync. A USB port that stays silent for 8 s is reopened; BLE only connects to a device advertising the Watchling name, with a 10 s connect timeout. Bluetooth is opt-in on the device. Audio PCM uses USB only. `npm run bridge:status` reads a snapshot over the IPC socket. See [device protocol](device-protocol.md) for the wire contract.
 
 ## Permissions
 
-A permission hook posts a request to the local broker. The bridge derives a short tool summary and risk label, queues requests and displays one active request. A touch response matching the active request resolves the hook with allow/deny. Timeout, hook cancellation or loss of connectivity releases the request without a device decision so the agent can use its normal prompt.
+A permission hook posts a request to the local broker. The bridge derives a short tool summary and risk label, queues requests and displays one active request. A touch response matching the active request resolves the hook with allow/deny. Timeout, hook cancellation or loss of connectivity for more than 10 s releases the request without a device decision so the agent can use its normal prompt.
 
 This is a local convenience interface for reviewing agent permissions. Risk classification is a regex/tool-name heuristic. The protocol defines voice/tap decision restrictions; those fields do not imply that voice recognition or tap recognition is a supported input feature.
 
@@ -34,7 +34,7 @@ This is a local convenience interface for reviewing agent permissions. Risk clas
 
 `echoear-firmware/main/` contains startup, framed transport handling, USB/BLE, audio, dashboard and animated robot face. The ESP-VoCat BSP supplies board-specific display, touch and codec setup. Firmware uses LVGL 9.6 and ESP-IDF 5.5 defaults for the ESP32-S3 target.
 
-Touch drives permission buttons and the pull-down settings screen. Brightness, volume and Voice are stored in NVS. Without recent activity the dashboard transitions into face mode and then dozing; incoming usage/clock updates do not count as interactions. Built-in chimes remain available independently of USB speech.
+Touch drives permission buttons and the pull-down settings screen. Brightness, volume, Voice and Bluetooth are stored in NVS. On battery with no USB power and no link for ten minutes the backlight turns off and advertising slows. Without recent activity the dashboard transitions into face mode and then dozing; incoming usage/clock updates do not count as interactions. Built-in chimes remain available independently of USB speech.
 
 ## Audio
 

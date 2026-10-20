@@ -23,15 +23,17 @@ On macOS, the bridge auto-selects the first device with Espressif vendor ID `303
 
 ## Bluetooth LE
 
-The device advertises as **Watchling** using Nordic UART Service. Enable Bluetooth on the Mac and allow Bluetooth access when macOS requests it. The bridge scans automatically unless `WATCHLING_BLE=off`.
+Bluetooth is **off by default**. Switch it on under Settings → Bluetooth; the device then advertises as **Watchling** using Nordic UART Service. Enable Bluetooth on the Mac and allow Bluetooth access when macOS requests it. The bridge scans automatically unless `WATCHLING_BLE=off`, and connects only to a device advertising the Watchling name. Switching Bluetooth off drops the connection and stops advertising; the pairing is kept, so switching it on again reconnects without a new code.
 
 On first connection, the screen shows a six-digit passkey. Enter it when macOS requests pairing. Firmware requires an encrypted authenticated connection and stores bonds in NVS. Subsequent connections reuse the bond. A flash erase can remove pairing state; re-pair if host and device state no longer agree.
 
-USB is preferred while responsive; BLE carries usage, events and permission decisions when USB is unavailable. Chimes still work over BLE. Raw speech audio is **USB-only**. Wi-Fi is not implemented.
+USB is preferred while responsive. With Bluetooth on, BLE stays connected as a standby while the cable is in, so unplugging switches over without dropping a permission request on screen. If every link drops, waiting requests stay on the device for 10 seconds before returning to the terminal. BLE carries usage, events and permission decisions; chimes still work over BLE. Raw speech audio is **USB-only**. Wi-Fi is not implemented.
 
 ## Touch and sound
 
-Pull down from the top edge and continue roughly halfway across the display to open Settings; an incomplete pull springs back. Adjust brightness and volume with the arcs. Releasing volume plays a sample chime. Voice controls spoken announcements and chatter, leaving chimes enabled. NVS stores these settings.
+Pull down from the top edge and continue roughly halfway across the display to open Settings; an incomplete pull springs back. Adjust brightness and volume with the arcs. Releasing volume plays a sample chime. Voice controls spoken announcements and chatter, leaving chimes enabled. Bluetooth turns the BLE link on or off. NVS stores these settings.
+
+While it runs on its battery (fuel gauge present and reporting discharge, no USB host attached) with no bridge link for ten minutes, the backlight turns off and Bluetooth advertises about once a second. A touch wakes the screen without pressing anything underneath; moving the device or the bridge reconnecting also wakes it. On a computer's USB port, or on a charger, it never turns off; a power bank counts as a charger once the battery is full.
 
 Swipe up, tap the closing hint or wait 15 seconds to close Settings. Permission decisions use the on-screen buttons; protocol fields for other decision sources do not imply an implemented voice-recognition feature.
 

@@ -1,13 +1,13 @@
 # Configuration and local data
 
-The bridge reads environment variables at startup. Settings on the device control brightness, volume and Voice separately and persist in NVS.
+The bridge reads environment variables at startup. Settings on the device control brightness, volume, Voice and Bluetooth separately and persist in NVS. Bluetooth is off until switched on on the device.
 
 ## Runtime variables
 
 | Variable | Default | Behavior |
 | --- | --- | --- |
 | `WATCHLING_PORT` | Auto-detect | Exact USB serial path; useful with multiple Espressif devices |
-| `WATCHLING_BLE` | Enabled | Set exactly `off` to disable Bluetooth scanning |
+| `WATCHLING_BLE` | Enabled | Set exactly `off` to disable Bluetooth scanning on the Mac (the device's own switch controls advertising) |
 | `WATCHLING_CONFIRM_TIMEOUT_S` | `120` | Seconds before an unanswered device permission request returns to the terminal |
 | `WATCHLING_TTS` | `say` on macOS | `say` or `off`; off also disables chatter, leaving device chimes |
 | `WATCHLING_TTS_VOICE` | System voice | macOS `say` voice for task and permission announcements; does not change prerecorded chatter |
@@ -40,9 +40,10 @@ The launch agent does not inherit your interactive shell configuration. Set vari
 launchctl setenv WATCHLING_BLE off
 cd pc-bridge
 npm run bridge:stop
+npm run bridge:start
 ```
 
-Start a new agent session to restart it. `launchctl setenv` affects subsequently launched processes in that user session; it is not a persistent configuration file across logins. Remove an override with `launchctl unsetenv WATCHLING_BLE`, then restart again. Reinstall hooks after moving the repository or switching the Node executable.
+`bridge:start` (or a new agent session) restarts it. `launchctl setenv` affects subsequently launched processes in that user session; it is not a persistent configuration file across logins. Remove an override with `launchctl unsetenv WATCHLING_BLE`, then restart again. Reinstall hooks after moving the repository or switching the Node executable.
 
 ## Local files
 

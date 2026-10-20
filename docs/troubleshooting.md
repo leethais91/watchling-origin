@@ -5,6 +5,8 @@ Start with a foreground USB connection from `pc-bridge/`: `WATCHLING_BLE=off npm
 | Symptom | Check or recovery |
 | --- | --- |
 | No USB port | Use a data cable, reconnect while holding BOOT, then run `npm run list-ports` |
+| Which link is in use? | `npm run bridge:status` shows the active link, both links' state, the device's Bluetooth switch and waiting requests |
+| Log shows `… silent; reopening` | The port stayed open while the device did not answer (for example after re-enumeration); the bridge closes it and finds the device again |
 | Flash fails because port is busy | Stop bridge; exit `idf.py monitor` with Ctrl-]; close other serial tools |
 | Wrong board selected | Set `WATCHLING_PORT` to the exact listed `/dev/cu.…` path |
 | `idf.py` is missing | Source `scripts/idf-env.sh` from the root; set `IDF_PATH` for a nondefault installation |
@@ -25,7 +27,7 @@ Start with a foreground USB connection from `pc-bridge/`: `WATCHLING_BLE=off npm
 
 ## Bluetooth
 
-Bluetooth must be enabled and macOS must allow access. Check that `WATCHLING_BLE=off` is not set in the process environment. The device advertises as Watchling and displays a six-digit pairing code; enter that code on the Mac when requested.
+First check that Bluetooth is switched on in the device's Settings (it is off by default) and run `npm run bridge:status` in `pc-bridge/`. Bluetooth must be enabled on the Mac and macOS must allow access. Check that `WATCHLING_BLE=off` is not set in the process environment. Log lines `BLE ignoring …: not Watchling` are other Bluetooth devices nearby and are expected. The device advertises as Watchling and displays a six-digit pairing code; enter that code on the Mac when requested.
 
 If pairing repeatedly fails after erasing firmware/NVS, remove the stale pairing on the Mac and pair again. First confirm that the same firmware works over USB. Native Bluetooth permissions can depend on how the bridge was started; the installed integration uses launchd to start it outside the coding agent's process tree.
 

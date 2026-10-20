@@ -10,7 +10,7 @@ A tiny desk companion for **Claude Code and Codex CLI**, built for the **ESP-VoC
 
 - Shows Claude and Codex usage arcs, Claude's estimated daily cost, clock and connection status.
 - Displays permission requests with touch **Approve / Deny** and falls back to the terminal if the device is unavailable or the request times out.
-- Connects over USB or paired Bluetooth LE, preferring USB when available.
+- Connects over USB, or over paired Bluetooth LE once you switch Bluetooth on in Settings; USB is preferred when both are up.
 - Plays notification chimes and USB-only spoken announcements.
 - Blinks, looks around, reacts to work, and plays prerecorded English chatter during quiet periods.
 - Offers brightness, volume and Voice controls in a pull-down Settings screen.
@@ -90,15 +90,17 @@ The extracted bundle runs the local installer described in [offline firmware ins
 
 A task completion triggers a chime and a short announcement. A permission request appears on the touchscreen while the terminal waits. Review the command or file summary before tapping a decision; use the terminal for questions that need a written answer. Unanswered requests return to the terminal after 120 seconds by default.
 
-Pull down from the top of the display to open Settings. Brightness and volume use the two arcs; Voice mutes speech and chatter while leaving chimes enabled. Values persist on the device. After 30 seconds without interaction the face fills the display; after five quiet minutes it dozes. A tap or agent event brings the dashboard back.
+Pull down from the top of the display to open Settings. Brightness and volume use the two arcs; Voice mutes speech and chatter while leaving chimes enabled; Bluetooth (off by default) lets the device work without the cable. Values persist on the device. After 30 seconds without interaction the face fills the display; after five quiet minutes it dozes. A tap or agent event brings the dashboard back. On battery, with no cable and no bridge for ten minutes, the screen turns off; a touch, picking it up, or the bridge reconnecting turns it back on.
 
-To free USB for flashing, stop the bridge from `pc-bridge/`:
+Manage the bridge from `pc-bridge/`:
 
 ```sh
-npm run bridge:stop
+npm run bridge:status   # running? which link, device Bluetooth switch, waiting requests
+npm run bridge:stop     # frees USB for flashing
+npm run bridge:start    # starts it again without opening an agent session
 ```
 
-Exit any serial monitor as well. The next agent session can start the bridge again.
+Exit any serial monitor before flashing. The next agent session also starts the bridge again.
 
 ## Documentation
 
