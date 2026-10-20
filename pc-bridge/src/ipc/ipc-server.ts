@@ -6,6 +6,7 @@
  *   POST /statusline  Claude Code statusline JSON → 204
  *   POST /event       AgentEventMessage without `t` → 204
  *   POST /activity    AgentActivityMessage without `t` → 204
+ *   POST /status      {} → BridgeStatus (see bridge-status.ts)
  *   POST /shutdown    {} → 204, then the bridge exits (frees the serial port for flashing)
  */
 import { chmod, mkdir, unlink } from "node:fs/promises";
@@ -13,6 +14,7 @@ import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AgentActivityMessage, AgentEventMessage, Decision } from "../protocol/messages.js";
 import type { PermissionInput } from "../permission/permission-summary.js";
 import type { StatuslineInput } from "../usage/usage-store.js";
+import type { BridgeStatus } from "./bridge-status.js";
 import { isBridgeRunning } from "./bridge-process.js";
 import { WATCHLING_DIR, SOCKET_PATH } from "./paths.js";
 
@@ -28,6 +30,7 @@ export interface IpcHandlers {
   statusline: (input: StatuslineInput) => void;
   event: (event: Omit<AgentEventMessage, "t">) => void;
   activity: (activity: Omit<AgentActivityMessage, "t">) => void;
+  status: () => BridgeStatus;
   shutdown: () => void;
 }
 
@@ -66,6 +69,9 @@ export async function startIpcServer(handlers: IpcHandlers): Promise<Server> {
       case "/activity":
         handlers.activity(body as Omit<AgentActivityMessage, "t">);
         res.writeHead(204).end();
+        return;
+      case "/status":
+        res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(handlers.status()));
         return;
       case "/shutdown":
         res.writeHead(204).end(() => handlers.shutdown());

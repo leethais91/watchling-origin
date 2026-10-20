@@ -32,6 +32,11 @@ export class TransportHub extends EventEmitter<LinkEvents> implements DeviceLink
     return this.activeLink;
   }
 
+  /** Name of the active link ("USB", "BLE"), or null when none answers. */
+  get activeName(): string | null {
+    return this.links.find(({ link }) => link === this.activeLink)?.name ?? null;
+  }
+
   get alive(): boolean {
     return this.activeLink?.alive ?? false;
   }

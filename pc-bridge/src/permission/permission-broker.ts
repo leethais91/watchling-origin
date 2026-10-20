@@ -36,6 +36,11 @@ export class PermissionBroker {
     private readonly timeoutMs: number,
   ) {}
 
+  /** Requests waiting for a decision, the one on screen included. */
+  get pendingCount(): number {
+    return this.queue.length;
+  }
+
   request(input: PermissionInput, signal: AbortSignal): Promise<Decision | null> {
     return new Promise((resolve) => {
       const id = this.nextId++;

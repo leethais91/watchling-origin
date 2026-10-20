@@ -39,8 +39,9 @@ const CLOCK_RESYNC_MS = 10 * 60 * 1000;
 const log = (...args: unknown[]) => console.log(new Date().toLocaleTimeString(), ...args);
 
 const usb = new SerialTransport(process.env.WATCHLING_PORT);
+const ble = process.env.WATCHLING_BLE !== "off" ? new BleTransport() : null;
 const links: { name: string; link: DeviceLink }[] = [{ name: "USB", link: usb }];
-if (process.env.WATCHLING_BLE !== "off") links.push({ name: "BLE", link: new BleTransport() });
+if (ble) links.push({ name: "BLE", link: ble });
 const transport = new TransportHub(links);
 const usage = new UsageStore(USAGE_STATE_PATH);
 await usage.restore();
@@ -49,6 +50,7 @@ const tts = createTtsEngine();
 let deviceVoice = true;
 /** Bluetooth switch on the device's settings screen; null until firmware reports it. */
 let deviceBle: boolean | null = null;
+let deviceFw: string | null = null;
 /** Speech clips are raw PCM: USB only. Over BLE the device still chimes. */
 const speechLink = {
   get alive() {
@@ -122,6 +124,7 @@ transport.on("message", (msg) => {
     case "hello":
       deviceVoice = msg.voice ?? true;
       deviceBle = msg.ble ?? null;
+      deviceFw = msg.fw;
       log(`device ready (fw ${msg.fw})${deviceVoice ? "" : " (voice off)"}${deviceBle === false ? " (bluetooth off)" : ""}`);
       transport.send(clockMessage());
       transport.send(usage.snapshot());
@@ -156,6 +159,14 @@ await startIpcServer({
   statusline: (input) => usage.updateFromStatusline(input),
   event: sendEvent,
   activity: (activity) => sendActivity(activity.src, activity.busy),
+  status: () => ({
+    link: transport.activeName,
+    usb: usb.alive,
+    ble: ble ? ble.alive : "disabled",
+    deviceBle,
+    fw: deviceFw,
+    pendingPermissions: broker.pendingCount,
+  }),
   shutdown: () => {
     log("stop requested");
     shutdown();
