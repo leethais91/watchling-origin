@@ -54,6 +54,27 @@ test("hook exit cancels the request on the device and shows the next one", async
   );
 });
 
+test("a link that comes back within the grace keeps the request on the device", async () => {
+  const { broker } = setup();
+  const pending = broker.request(bash("ls"), new AbortController().signal);
+  broker.cancelAllAfter(20);
+  assert.equal(broker.keepAll(), true);
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(broker.onDeviceDecision(1, "approve", "touch"), true, "still waiting for the device");
+  assert.equal(await pending, "approve");
+  assert.equal(broker.keepAll(), false, "nothing left to keep");
+});
+
+test("a link still gone after the grace releases requests to the terminal", async () => {
+  const { broker, sent } = setup();
+  const pending = broker.request(bash("ls"), new AbortController().signal);
+  broker.cancelAllAfter(10);
+  broker.cancelAllAfter(60_000); // repeated drops do not restart the grace
+  assert.equal(await pending, null);
+  assert.equal(sent.at(-1)?.t, "confirm_cancel");
+  assert.equal(broker.keepAll(), false);
+});
+
 test("timeout falls back to the terminal prompt", async () => {
   const { broker, sent } = setup(10);
   assert.equal(await broker.request(bash("ls"), new AbortController().signal), null);

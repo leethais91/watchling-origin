@@ -2,7 +2,7 @@
  * Queues permission requests and shows them on the device one at a time.
  *
  * Every request resolves exactly once: with the device's decision, or with null
- * (timeout, hook process gone, device unplugged) so Claude Code falls back to
+ * (timeout, hook process gone, device unreachable for a while) so Claude Code falls back to
  * its own terminal prompt.
  */
 import type {
@@ -29,6 +29,7 @@ export function isDecisionAllowed(message: ConfirmRequestMessage, action: Decisi
 export class PermissionBroker {
   private readonly queue: PendingRequest[] = [];
   private nextId = 1;
+  private releaseTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly send: (msg: HostMessage) => boolean,
@@ -68,8 +69,27 @@ export class PermissionBroker {
     if (active) this.send(active.message);
   }
 
-  /** Releases every waiting hook to the terminal prompt. */
+  /**
+   * The device link dropped: release every waiting hook after `graceMs` unless `keepAll()`
+   * comes first. A BLE link often reconnects within seconds; the device's `hello` then
+   * brings back the active request through `resendActive()`.
+   */
+  cancelAllAfter(graceMs: number): void {
+    this.releaseTimer ??= setTimeout(() => this.cancelAll(), graceMs);
+  }
+
+  /** The link is back in time; returns whether a release was pending. */
+  keepAll(): boolean {
+    if (!this.releaseTimer) return false;
+    clearTimeout(this.releaseTimer);
+    this.releaseTimer = null;
+    return true;
+  }
+
+  /** Releases every waiting hook to the terminal prompt (now, so a pending grace is moot). */
   cancelAll(): void {
+    if (this.releaseTimer) clearTimeout(this.releaseTimer);
+    this.releaseTimer = null;
     for (const pending of [...this.queue]) this.finish(pending.message.id, null);
   }
 

@@ -28,6 +28,8 @@ import { startCodexSessionWatcher } from "./usage/codex-session-watcher.js";
 import { UsageStore } from "./usage/usage-store.js";
 
 const CONFIRM_TIMEOUT_MS = Number(process.env.WATCHLING_CONFIRM_TIMEOUT_S ?? 120) * 1000;
+/** How long a lost link may take to come back before waiting requests go to the terminal. */
+const LINK_LOSS_GRACE_MS = 10_000;
 /** Coalesces bursts of statusline/Codex updates into one usage frame. */
 const USAGE_THROTTLE_MS = 1000;
 const MAX_EVENT_TEXT_CHARS = 200;
@@ -104,10 +106,13 @@ usage.on("change", () => {
   }, USAGE_THROTTLE_MS);
 });
 
-transport.on("connected", (name) => log(`talking to the device over ${name}`));
+transport.on("connected", (name) => {
+  log(`talking to the device over ${name}`);
+  if (broker.keepAll()) log("link back in time; keeping permission requests");
+});
 transport.on("disconnected", () => {
-  log("device unreachable");
-  broker.cancelAll();
+  log(`device unreachable; releasing permission requests in ${LINK_LOSS_GRACE_MS / 1000} s`);
+  broker.cancelAllAfter(LINK_LOSS_GRACE_MS);
 });
 transport.on("log", (line) => log("[device]", line));
 transport.on("message", (msg) => {

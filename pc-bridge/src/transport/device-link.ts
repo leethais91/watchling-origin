@@ -9,6 +9,13 @@ import type { DeviceMessage, HostMessage } from "../protocol/messages.js";
 /** Bridge pings every 2 s; a link counts as alive if the device answered within 5 s. */
 export const PING_INTERVAL_MS = 2000;
 export const ALIVE_WINDOW_MS = 5000;
+/** An open link the device has not answered on for this long is reopened. */
+export const STALE_LINK_MS = 8000;
+
+/** True when the device has been silent for `STALE_LINK_MS` since the link opened or last answered. */
+export function isLinkStale(openedAtMs: number, lastSeenMs: number, nowMs = Date.now()): boolean {
+  return nowMs - Math.max(openedAtMs, lastSeenMs) >= STALE_LINK_MS;
+}
 
 export interface LinkEvents {
   message: [DeviceMessage];

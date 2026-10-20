@@ -3,8 +3,9 @@
  * Scans by service UUID, reconnects after drops, and tracks liveness with ping/pong.
  *
  * Pairing is driven by the device: the first write needs an authenticated link, so macOS
- * shows its passkey prompt and the device displays the code. Until the device answers,
- * the ping is a `hello`, so a pairing that eats the first messages still syncs.
+ * shows its passkey prompt and the device displays the code. Pings repeat until the device
+ * answers; the hub says `hello` once this link is picked, so a pairing that eats the first
+ * messages still syncs.
  *
  * Speech clips are not sent over BLE (too slow for raw PCM); chimes still play.
  */
@@ -40,7 +41,7 @@ export class BleTransport extends EventEmitter<LinkEvents> implements DeviceLink
 
   start(): void {
     this.runConnectLoop();
-    setInterval(() => this.send(this.lastSeenMs === 0 ? { t: "hello" } : { t: "ping" }), PING_INTERVAL_MS).unref();
+    setInterval(() => this.send({ t: "ping" }), PING_INTERVAL_MS).unref();
   }
 
   get alive(): boolean {
@@ -50,12 +51,13 @@ export class BleTransport extends EventEmitter<LinkEvents> implements DeviceLink
   /**
    * Queues the frame as write-with-response chunks; order is kept across messages. Pings
    * are skipped while writes are pending: during pairing macOS holds the first write until
-   * the passkey is entered, and a backlog of hellos would make the bridge re-sync each time.
+   * the passkey is entered, and a backlog of pings is pointless. The hub's `hello` is
+   * never skipped, since it is sent once per switch and triggers the re-sync.
    */
   send(msg: HostMessage): boolean {
     const rx = this.rx;
     if (!rx) return false;
-    if ((msg.t === "ping" || msg.t === "hello") && this.pendingWrites > 0) return true;
+    if (msg.t === "ping" && this.pendingWrites > 0) return true;
     const frame = encodeJsonFrame(msg);
     this.pendingWrites++;
     this.writes = this.writes.then(async () => {
@@ -67,7 +69,8 @@ export class BleTransport extends EventEmitter<LinkEvents> implements DeviceLink
         // Typically "insufficient authentication" while pairing; the next ping retries.
         this.emit("log", `BLE write failed: ${(err as Error).message}`);
       } finally {
-        this.pendingWrites--;
+        // Floored: a write that hung across a disconnect may settle after the reset there.
+        this.pendingWrites = Math.max(0, this.pendingWrites - 1);
       }
     });
     return true;
@@ -104,13 +107,17 @@ export class BleTransport extends EventEmitter<LinkEvents> implements DeviceLink
     while (!this.stopped && !this.peripheral) {
       let found: Peripheral | undefined;
       try {
+        this.emit("log", "BLE scanning for Watchling");
         await noble.startScanningAsync([NUS_SERVICE], false);
         for await (const peripheral of noble.discoverAsync()) {
           found = peripheral;
           break;
         }
         await noble.stopScanningAsync();
-        if (found) await this.open(found);
+        if (found) {
+          this.emit("log", `BLE found ${found.advertisement.localName ?? found.id} (rssi ${found.rssi}); connecting`);
+          await this.open(found);
+        }
       } catch (err) {
         // noble can reject with a bare string or code instead of an Error.
         this.emit("log", `BLE connect failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -142,15 +149,19 @@ export class BleTransport extends EventEmitter<LinkEvents> implements DeviceLink
     tx.on("data", read);
     await tx.subscribeAsync();
 
-    peripheral.once("disconnect", () => {
+    peripheral.once("disconnect", (reason?: unknown) => {
+      this.emit("log", `BLE disconnected${reason === undefined ? "" : ` (reason ${String(reason)})`}`);
       this.peripheral = null;
       this.rx = null;
       this.lastSeenMs = 0;
+      // A write that never settles would otherwise keep every later ping suppressed.
+      this.writes = Promise.resolve();
+      this.pendingWrites = 0;
       this.emit("disconnected");
       if (!this.stopped) void sleep(RECONNECT_INTERVAL_MS).then(() => this.runConnectLoop());
     });
     this.rx = rx;
     this.emit("connected", `BLE ${peripheral.advertisement.localName ?? peripheral.id}`);
-    this.send({ t: "hello" });
+    this.send({ t: "ping" });
   }
 }
